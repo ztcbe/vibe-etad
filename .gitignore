@@ -1,0 +1,59 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+
+# ── Environment ──
+.env
+.env.local
+.env.*.local
+
+# ── Database ──
+*.db
+*.sqlite3
+test.db
+
+# ── Docker ──
+pgdata/
+
+# ── Uploads / Media ──
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── Logs ──
+*.log
+/tmp/
+
+# ── Test ──
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── Claude ──
+.claude/plans/
+.claude/projects/
+.claude/skills/
+.claude/worktrees/
+
+# ── Misc ──
+*.tmp
+*.bak
+.claude
+CLAUDE.md
+llm_provider

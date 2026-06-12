@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>zvibe — Hẹn hò có AI đồng hành</title>
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<div id="app">
+  <!-- ════ Toast container ════ -->
+  <div id="toast-wrap"></div>
+
+  <!-- ════ Match celebration overlay ════ -->
+  <div id="celebration">
+    <div class="celeb-icon">💞</div>
+    <h2 id="celebTitle">Match rồi!</h2>
+    <p id="celebMsg">Cả hai có thể bắt đầu trò chuyện ngay bây giờ.</p>
+    <button class="btn btn-primary" onclick="Celebration.goToChat()">Mở chat ngay</button>
+  </div>
+
+  <!-- ════ SCREEN: AUTH ════ -->
+  <div id="screen-auth" class="screen fullscreen active">
+    <div class="auth-card">
+      <div class="wordmark" id="authTitle">zvibe<span class="dot">.</span></div>
+      <div class="tagline" id="authTagline">Hẹn hò có AI đồng hành</div>
+
+      <!-- Login form -->
+      <div id="loginForm">
+        <label class="field-label">Username</label>
+        <input class="input-field" id="loginUser" type="text" placeholder="username" value="linh">
+        <label class="field-label" style="margin-top:10px">Mật khẩu</label>
+        <input class="input-field" id="loginPass" type="password" placeholder="••••••••" value="demo123456">
+        <label class="check-row"><input type="checkbox" id="ageCheck"> Tôi từ 18 tuổi trở lên</label>
+        <div class="field-error" id="authErr"></div>
+        <button class="btn btn-primary" onclick="Auth.login()">Đăng nhập</button>
+        <div class="switch-link" onclick="Auth.toggleForm()">Chưa có tài khoản? <b>Đăng ký</b></div>
+      </div>
+
+      <!-- Register form -->
+      <div id="registerForm" style="display:none">
+        <label class="field-label">Username</label>
+        <input class="input-field" id="regUser" type="text" placeholder="username">
+        <label class="field-label" style="margin-top:10px">Mật khẩu (tối thiểu 8 ký tự)</label>
+        <input class="input-field" id="regPass" type="password" placeholder="••••••••">
+        <label class="field-label" style="margin-top:10px">Nhập lại mật khẩu</label>
+        <input class="input-field" id="regPass2" type="password" placeholder="••••••••">
+        <label class="field-label" style="margin-top:10px">Ngày sinh</label>
+        <input class="input-field" id="regDob" type="date" value="2000-01-01">
+        <label class="check-row"><input type="checkbox" id="ageCheckReg"> Tôi từ 18 tuổi trở lên</label>
+        <div class="field-error" id="regErr"></div>
+        <button class="btn btn-primary" onclick="Auth.register()">Đăng ký</button>
+        <div class="switch-link" onclick="Auth.toggleForm()">Đã có tài khoản? <b>Đăng nhập</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ APP SHELL (all authenticated screens) ════ -->
+  <div id="app-shell" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+    <!-- Topbar -->
+    <div id="app-topbar">
+      <div class="wordmark" onclick="Router.go('home')">zvibe<span class="dot">.</span></div>
+      <div class="topbar-right">
+        <div class="completeness">Hồ sơ <span id="compLabel">0</span>% <div class="completeness-bar"><div id="compBar" style="width:0%"></div></div></div>
+        <div class="icon-btn" onclick="Router.go('home')" title="Trợ lý">🤍</div>
+        <div class="icon-btn" onclick="Auth.logout()" title="Đăng xuất">🚪</div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div id="app-body">
+      <!-- Sidebar -->
+      <div id="sidebar">
+        <div class="nav-item active" data-route="home" onclick="Router.go('home')">💬 Trợ lý</div>
+        <div class="nav-item" data-route="matches" onclick="Router.go('matches')">💞 Matches <span class="badge" id="matchBadge" style="display:none">0</span></div>
+        <div class="nav-item" data-route="profile" onclick="Router.go('profile')">👤 Hồ sơ</div>
+        <div class="nav-divider"></div>
+        <div id="miniProfile" class="mini-profile">
+          <div class="mini-avatar">🌿</div>
+          <div><div class="name" id="miniName">...</div><div class="sub" id="miniSub">...</div></div>
+        </div>
+      </div>
+
+      <!-- ════ SCREEN: HOME (AI Assistant) ════ -->
+      <div id="screen-home" class="screen active">
+        <div class="chat-area">
+          <div class="chat-scroll" id="homeChatScroll"></div>
+          <div class="chat-input-bar">
+            <div class="attach-btn" onclick="toast('Tính năng đang phát triển 📎')">📎</div>
+            <input class="chat-input" id="homeChatInput" placeholder="Nhắn gì đó với trợ lý..." onkeydown="if(event.key==='Enter')Assistant.send()">
+            <div class="send-btn" onclick="Assistant.send()">➤</div>
+          </div>
+        </div>
+        <div id="context-panel">
+          <div class="context-card">
+            <h4>Vibe của bạn</h4>
+            <p id="ctxVibe">Đang tải...</p>
+            <div class="tag-list" id="ctxTags"></div>
+          </div>
+          <div class="context-card">
+            <h4>Gợi ý nhanh</h4>
+            <button class="quick-action" onclick="Assistant.quickFind()">🔍 Tìm người hợp vibe</button>
+            <button class="quick-action" onclick="Router.go('matches')">💞 Xem danh sách match</button>
+            <button class="quick-action" onclick="Router.go('profile')">📝 Xem hồ sơ của tôi</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ SCREEN: MATCHES ════ -->
+      <div id="screen-matches" class="screen">
+        <div class="matches-list" id="matchesList"></div>
+      </div>
+
+      <!-- ════ SCREEN: CHAT 1-1 ════ -->
+      <div id="screen-chat" class="screen">
+        <div class="chat11-header">
+          <div class="who">
+            <span style="cursor:pointer;font-size:1.1rem;margin-right:4px" onclick="Router.go('matches')">←</span>
+            <div class="avatar avatar-sm avatar-placeholder" id="chat11Avatar">👤</div>
+            <div><div style="font-weight:600;font-size:0.86rem" id="chat11Name">...</div><div class="status" id="chat11Status">● đang hoạt động</div></div>
+          </div>
+          <div class="menu-dots" onclick="Chat.toggleMenu(event)">⋮
+            <div class="menu-dropdown" id="chat11Menu" onclick="event.stopPropagation()">
+              <div onclick="Modal.show('unmatch')">Unmatch</div>
+              <div onclick="Modal.show('report')">Report</div>
+              <div onclick="Modal.show('block')">Block</div>
+            </div>
+          </div>
+        </div>
+        <div class="chat-scroll" id="chat11Scroll" style="flex:1"></div>
+        <div class="suggest-tray" id="suggestTray">
+          <div class="label">✨ Gợi ý trả lời từ trợ lý</div>
+          <div id="suggestItems"></div>
+        </div>
+        <div class="chat-input-bar">
+          <div class="suggest-btn" onclick="Chat.showSuggestions()">✨ Gợi ý trả lời</div>
+          <input class="chat-input" id="chat11Input" placeholder="Nhắn tin..." onkeydown="if(event.key==='Enter')Chat.send()">
+          <div class="send-btn" onclick="Chat.send()">➤</div>
+        </div>
+
+        <!-- Modals -->
+        <div class="overlay" id="overlayUnmatch">
+          <div class="modal"><h3>Unmatch?</h3><p>Bạn sẽ không thể chat với người này nữa. Hành động này không thể hoàn tác.</p><div class="modal-actions"><button class="btn btn-ghost" onclick="Modal.hide('unmatch')">Hủy</button><button class="btn btn-danger" onclick="Modal.confirm('unmatch')">Unmatch</button></div></div>
+        </div>
+        <div class="overlay" id="overlayReport">
+          <div class="modal"><h3>Report</h3><p>Vui lòng chọn lý do:</p><div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;font-size:0.8rem"><label><input type="radio" name="rpt" value="harassment" checked> Hành vi quấy rối</label><label><input type="radio" name="rpt" value="fake_profile"> Thông tin giả mạo</label><label><input type="radio" name="rpt" value="inappropriate"> Nội dung không phù hợp</label><label><input type="radio" name="rpt" value="other"> Khác</label></div><div class="modal-actions"><button class="btn btn-ghost" onclick="Modal.hide('report')">Hủy</button><button class="btn btn-primary" onclick="Modal.confirm('report')">Gửi báo cáo</button></div></div>
+        </div>
+        <div class="overlay" id="overlayBlock">
+          <div class="modal"><h3>Block?</h3><p>Họ sẽ không thể tìm thấy hoặc liên hệ với bạn nữa.</p><div class="modal-actions"><button class="btn btn-ghost" onclick="Modal.hide('block')">Hủy</button><button class="btn btn-danger" onclick="Modal.confirm('block')">Block</button></div></div>
+        </div>
+      </div>
+
+      <!-- ════ SCREEN: PROFILE ════ -->
+      <div id="screen-profile" class="screen">
+        <div class="profile-layout">
+          <div class="profile-hero">
+            <div class="profile-avatar-big" id="profileAvatar">🌿</div>
+            <div class="profile-name" id="profileName">...</div>
+            <div class="profile-meta" id="profileCity">...</div>
+            <div class="visibility-pill" id="profileVisibility">● Active</div>
+          </div>
+          <div class="profile-detail">
+            <div class="profile-section"><h4>Giới thiệu</h4><p id="profileBio">...</p></div>
+            <div class="profile-section"><h4>Tính cách & sở thích</h4><div class="tag-list" id="profileTags"></div></div>
+            <div class="profile-section"><h4>Mục tiêu hẹn hò</h4><p id="profileGoal">...</p></div>
+            <div class="edit-via-chat">
+              💬 Muốn cập nhật thông tin? Nói với trợ lý: "Cập nhật hồ sơ giúp mình"
+              <br><button class="btn btn-sm" style="margin-top:8px" onclick="Router.go('home'); setTimeout(()=>document.getElementById('homeChatInput').focus(),300)">Nói với trợ lý →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ SCREEN: ADMIN ════ -->
+      <div id="screen-admin" class="screen">
+        <div class="admin-layout">
+          <div class="admin-stats" id="adminStats"></div>
+          <h3 style="font-family:'Caveat',cursive;font-size:1.2rem;margin:16px 0 8px">👥 Users</h3>
+          <div style="overflow-x:auto"><table class="admin-table"><thead><tr><th>Username</th><th>Tên</th><th>Role</th><th>Status</th><th>Ngày sinh</th><th>Hồ sơ</th></tr></thead><tbody id="adminUserTable"></tbody></table></div>
+        </div>
+      </div>
+
+    </div><!-- /app-body -->
+  </div><!-- /app-shell -->
+</div><!-- /app -->
+
+<!-- ════ JS Modules ════ -->
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/assistant.js"></script>
+<script src="js/matches.js"></script>
+<script src="js/chat.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/components/toast.js"></script>
+<script src="js/components/modal.js"></script>
+<script src="js/components/celebration.js"></script>
+</body>
+</html>
