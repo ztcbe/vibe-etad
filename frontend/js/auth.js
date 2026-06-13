@@ -29,6 +29,8 @@ const Auth = {
     btn.disabled = false;
 
     if (resp.success) {
+      // Clear any previous user state before setting new tokens
+      State.clear();
       State.set('token', resp.data.access_token);
       State.set('refreshToken', resp.data.refresh_token);
       localStorage.setItem('zvibe_token', resp.data.access_token);
@@ -61,6 +63,8 @@ const Auth = {
     btn.disabled = false;
 
     if (resp.success) {
+      // Clear any previous user state before setting new tokens
+      State.clear();
       State.set('token', resp.data.access_token);
       State.set('refreshToken', resp.data.refresh_token);
       localStorage.setItem('zvibe_token', resp.data.access_token);
@@ -76,6 +80,8 @@ const Auth = {
     localStorage.removeItem('zvibe_token');
     localStorage.removeItem('zvibe_refresh');
     State.clear();
+    // Kill any active WebSocket
+    if (typeof Chat !== 'undefined' && Chat.cleanup) Chat.cleanup();
     Router.go('auth');
     toast('Đã đăng xuất', 'info');
   },

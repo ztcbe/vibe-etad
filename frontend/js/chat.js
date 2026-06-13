@@ -6,17 +6,26 @@ const Chat = {
   _matchId: null,
   _user: null,
   _ws: null,
+  _wsGen: 0,           // generation counter — detects stale WS connections
   _reconnectTimer: null,
+  _sending: false,      // guard against double-send
+  _renderedIds: new Set(),  // dedup rendered message IDs
 
   async init(matchId, user) {
+    // Clean up previous chat state before initializing new one
+    this.cleanup();
     this._matchId = matchId;
     this._user = user;
+    this._renderedIds = new Set();
     State.set('activeChatId', matchId);
     State.set('activeChatUser', user);
 
     document.getElementById('chat11Name').textContent = `${user.display_name || '...'}, ${user.age || ''}`;
     document.getElementById('chat11Avatar').textContent = user.display_name?.[0] || '👤';
-    document.getElementById('chat11Status').textContent = '● đang hoạt động';
+    const isOnline = user.is_online !== undefined ? user.is_online : true;
+    const statusEl = document.getElementById('chat11Status');
+    statusEl.textContent = isOnline ? '● đang hoạt động' : '● không hoạt động';
+    statusEl.style.color = isOnline ? 'var(--sage)' : 'var(--ink-soft)';
 
     // Load history
     const scroll = document.getElementById('chat11Scroll');
@@ -36,18 +45,35 @@ const Chat = {
   },
 
   _connectWs() {
-    if (this._ws) this._ws.close();
+    // Kill any existing connection and pending reconnect
+    if (this._ws) {
+      this._ws.onclose = null;  // prevent stale onclose from firing
+      this._ws.close();
+      this._ws = null;
+    }
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+
     const token = State.get('token');
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${location.host}/ws/chats/${this._matchId}?token=${token}`;
 
+    const gen = ++this._wsGen;  // capture generation for THIS connection
+
     try {
       this._ws = new WebSocket(wsUrl);
-      this._ws.onopen = () => console.log('WS connected');
+      this._ws.onopen = () => console.log('WS connected gen', gen);
       this._ws.onmessage = (evt) => {
         const data = JSON.parse(evt.data);
         if (data.event === 'message_created' && data.data.sender_user_id !== State.get('user')?.id) {
           this._addMessage(data.data);
+          // Auto mark as read since chat is open (use current WS, not stale ref)
+          const currentWs = this._ws;
+          if (currentWs && currentWs.readyState === WebSocket.OPEN) {
+            currentWs.send(JSON.stringify({ action: 'mark_read', message_ids: [data.data.id] }));
+          }
         } else if (data.event === 'match_unavailable') {
           toast('Match này không còn khả dụng', 'error');
           document.getElementById('chat11Input').disabled = true;
@@ -58,6 +84,8 @@ const Chat = {
         }
       };
       this._ws.onclose = () => {
+        // Only act if this is still the current generation
+        if (this._wsGen !== gen) return;
         this._ws = null;
         // Reconnect after 3s
         this._reconnectTimer = setTimeout(() => this._connectWs(), 3000);
@@ -69,13 +97,26 @@ const Chat = {
   },
 
   _addMessage(msg) {
+    // Dedup by message ID — skip if already rendered
+    if (msg.id) {
+      if (this._renderedIds.has(msg.id)) return;
+      this._renderedIds.add(msg.id);
+    }
     const scroll = document.getElementById('chat11Scroll');
     const isMine = msg.sender_user_id === State.get('user')?.id;
     const row = document.createElement('div');
     row.className = `msg-row${isMine ? ' user' : ''}`;
     const content = marked.parse(msg.content);
+    // Show actual avatar image if available
+    let myAvatar = '🌿';
+    if (isMine) {
+      const profile = State.get('profile');
+      if (profile?.avatar_url) {
+        myAvatar = `<img src="${profile.avatar_url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+      }
+    }
     row.innerHTML = `
-      <div class="avatar avatar-sm avatar-placeholder" style="background:${isMine ? 'var(--teal-soft)' : 'var(--lavender-soft)'}">${isMine ? '🌿' : (this._user?.display_name?.[0] || '👤')}</div>
+      <div class="avatar avatar-sm avatar-placeholder" style="background:${isMine ? 'var(--teal-soft)' : 'var(--lavender-soft)'}">${isMine ? myAvatar : (this._user?.display_name?.[0] || '👤')}</div>
       <div class="bubble ${isMine ? 'user' : 'ai'}">${content}</div>
     `;
     scroll.appendChild(row);
@@ -83,24 +124,31 @@ const Chat = {
   },
 
   async send() {
+    // Guard against rapid double-sends
+    if (this._sending) return;
     const input = document.getElementById('chat11Input');
     const text = input.value.trim();
     if (!text) return;
     input.value = '';
+    this._sending = true;
 
-    // Try WS first
-    if (this._ws && this._ws.readyState === WebSocket.OPEN) {
-      this._ws.send(JSON.stringify({ action: 'send_message', content: text, message_type: 'text' }));
-      // Optimistic render
-      this._addMessage({ sender_user_id: State.get('user')?.id, content: text });
-    } else {
-      // REST fallback
-      const resp = await api.sendMessage(this._matchId, text);
-      if (resp.success) {
-        this._addMessage(resp.data);
+    try {
+      // Try WS first
+      if (this._ws && this._ws.readyState === WebSocket.OPEN) {
+        this._ws.send(JSON.stringify({ action: 'send_message', content: text, message_type: 'text' }));
+        // Optimistic render
+        this._addMessage({ sender_user_id: State.get('user')?.id, content: text });
       } else {
-        toast(resp.error?.message || 'Gửi tin nhắn thất bại', 'error');
+        // REST fallback
+        const resp = await api.sendMessage(this._matchId, text);
+        if (resp.success) {
+          this._addMessage(resp.data);
+        } else {
+          toast(resp.error?.message || 'Gửi tin nhắn thất bại', 'error');
+        }
       }
+    } finally {
+      this._sending = false;
     }
   },
 
@@ -111,15 +159,24 @@ const Chat = {
       return;
     }
 
-    document.getElementById('suggestItems').innerHTML = '<div class="loading" style="padding:8px"><div class="spinner"></div></div>';
+    const itemsEl = document.getElementById('suggestItems');
+    itemsEl.innerHTML = '<div class="loading" style="padding:8px"><div class="spinner"></div></div>';
     tray.classList.add('show');
 
     const resp = await api.suggestReply(this._matchId);
     if (resp.success) {
-      document.getElementById('suggestItems').innerHTML = resp.data.suggestions.map(s => `
-        <div class="suggestion" onclick="Chat._useSuggestion('${s.replace(/'/g, "\\'")}')">${s}</div>
+      itemsEl.innerHTML = resp.data.suggestions.map((s, i) => `
+        <div class="suggestion" data-text="${s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}">${s}</div>
       `).join('');
     }
+
+    // Event delegation — single handler on container, no inline onclick
+    itemsEl.onclick = (e) => {
+      const el = e.target.closest('.suggestion');
+      if (!el) return;
+      const text = el.getAttribute('data-text');
+      if (text) this._useSuggestion(text);
+    };
   },
 
   _useSuggestion(text) {
@@ -140,7 +197,32 @@ const Chat = {
   },
 
   cleanup() {
-    if (this._ws) { this._ws.close(); this._ws = null; }
-    if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); }
+    // ── WS cleanup ──
+    if (this._ws) {
+      this._ws.onclose = null;  // prevent stale onclose
+      this._ws.close();
+      this._ws = null;
+    }
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+    this._wsGen++;  // invalidate all previous generations
+    this._sending = false;
+
+    // ── UI cleanup — prevent stale state leaking across matches ──
+    const tray = document.getElementById('suggestTray');
+    if (tray) tray.classList.remove('show');
+    const suggestItems = document.getElementById('suggestItems');
+    if (suggestItems) suggestItems.innerHTML = '';
+
+    const input = document.getElementById('chat11Input');
+    if (input) { input.value = ''; input.disabled = false; }
+
+    const menu = document.getElementById('chat11Menu');
+    if (menu) menu.classList.remove('show');
+
+    const statusEl = document.getElementById('chat11Status');
+    if (statusEl) statusEl.style.color = '';
   },
 };

@@ -20,6 +20,7 @@ class User(Base):
     status: Mapped[UserStatus] = mapped_column(zvibe_enum(UserStatus), default=UserStatus.ACTIVE, nullable=False)
     date_of_birth: Mapped[date] = mapped_column(Date, nullable=False)
     is_age_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

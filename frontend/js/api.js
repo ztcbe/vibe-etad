@@ -88,6 +88,83 @@ const api = {
   async sendMessage(matchId, content) { return this.post(`/chats/${matchId}/messages`, { content }); },
   async suggestReply(matchId, tone = 'natural') { return this.post(`/chats/${matchId}/suggest-reply`, { tone }); },
 
+  // ── Media shortcuts ──
+  async uploadAvatar(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('purpose', 'avatar');
+    const token = State.get('token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    try {
+      const resp = await fetch(`${API_BASE}/media/upload`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      if (resp.status === 401 && State.get('refreshToken')) {
+        const refResp = await fetch(`${API_BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: State.get('refreshToken') }),
+        });
+        if (refResp.ok) {
+          const refData = await refResp.json();
+          State.set('token', refData.data.access_token);
+          State.set('refreshToken', refData.data.refresh_token);
+          headers['Authorization'] = `Bearer ${refData.data.access_token}`;
+          const retryResp = await fetch(`${API_BASE}/media/upload`, {
+            method: 'POST',
+            headers,
+            body: formData,
+          });
+          return retryResp.json();
+        }
+      }
+      return resp.json();
+    } catch (e) {
+      return { success: false, error: { code: 'NETWORK', message: 'Không thể kết nối đến server' } };
+    }
+  },
+
+  async uploadMedia(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('purpose', 'chat_attachment');
+    const token = State.get('token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    try {
+      const resp = await fetch(`${API_BASE}/media/upload`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      if (resp.status === 401 && State.get('refreshToken')) {
+        const refResp = await fetch(`${API_BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: State.get('refreshToken') }),
+        });
+        if (refResp.ok) {
+          const refData = await refResp.json();
+          State.set('token', refData.data.access_token);
+          State.set('refreshToken', refData.data.refresh_token);
+          headers['Authorization'] = `Bearer ${refData.data.access_token}`;
+          const retryResp = await fetch(`${API_BASE}/media/upload`, {
+            method: 'POST',
+            headers,
+            body: formData,
+          });
+          return retryResp.json();
+        }
+      }
+      return resp.json();
+    } catch (e) {
+      return { success: false, error: { code: 'NETWORK', message: 'Không thể kết nối đến server' } };
+    }
+  },
+
   // ── Assistant shortcuts ──
   async createSession(title) { return this.post('/assistant/sessions', { title }); },
   async listSessions() { return this.get('/assistant/sessions'); },

@@ -90,13 +90,13 @@ async def test_chat_persists_messages(client, auth_headers):
 @pytest.mark.asyncio
 async def test_agent_builds(client):
     """Verify agent can be built (no LLM key needed for build)."""
-    from modules.assistant.agents import build_zvibe_agent
-    agent = build_zvibe_agent()
-    assert agent.name == "ZvibeAssistantAgent"
+    from modules.assistant.agents import build_coordinator_agent
+    agent = build_coordinator_agent()
+    assert agent.name == "CoordinatorAgent"
     assert len(agent.sub_agents) == 2
     sub_names = {a.name for a in agent.sub_agents}
-    assert sub_names == {"ProfileBuilderAgent", "MatchmakerAgent"}
-    assert len(agent.tools) == 2
+    assert sub_names == {"MatchmakerAgent", "ConversationCoachAgent"}
+    assert len(agent.tools) == 10  # 4 profile + 5 matching + 1 notification
 
 
 @pytest.mark.asyncio

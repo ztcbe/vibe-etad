@@ -55,21 +55,27 @@
 ## Agent Architecture (Google ADK)
 
 ```
-ZvibeAssistantAgent (root)
-  ├── ProfileBuilderAgent (sub)
-  │     Tools: get_my_profile, update_my_profile, calculate_profile_completeness
-  │     Prompt: PROFILE_BUILDER_SYSTEM_PROMPT (Vietnamese)
-  │
+CoordinatorAgent (root)
+  Tools: get_my_profile, calculate_profile_completeness, update_my_profile
+  Instruction: Vietnamese — general chat, profile onboarding, routing to subs
+
   ├── MatchmakerAgent (sub)
-  │     Tools: search_candidates, like_candidate, pass_candidate, list_my_matches
-  │     Prompt: Matchmaker instruction (Vietnamese)
+  │     Tools: calculate_profile_completeness, search_candidates, like_candidate, pass_candidate, list_my_matches
+  │     Instruction: Vietnamese — matching workflow, always check completeness first
   │
-  └── (Future) ConversationCoachAgent, SafetyAgent
+  └── ConversationCoachAgent (sub)
+        Tools: get_match_context, generate_suggested_replies
+        Instruction: Vietnamese — conversation advice, reply suggestions
+        Also callable directly from suggest-reply API (bypasses coordinator)
 ```
 
-**LLM adapter**: `VngCloudLlm` implements ADK's `BaseLlm.generate_content_async`. Translates between `google.genai.types.Content` and OpenAI-compatible API format. Uses VNGCloud MaaS endpoint.
+**LLM adapter**: `LiteLlm` from ADK (backed by litellm) configured for VNGCloud MaaS via `openai/` provider prefix with custom `api_base`. Replaces the previous custom `VngCloudLlm(BaseLlm)` adapter.
+
+**Session storage**: `DatabaseSessionService` (ADK) using the main PostgreSQL database. Persists agent conversation state across server restarts. Initialized at app startup via `lifespan`, shared across all requests. See `modules/assistant/session.py`.
 
 **Tool context injection**: Python `contextvars` pass DB session + user_id to ADK tools without modifying ADK internals.
+
+**Routing**: CoordinatorAgent uses ADK's auto-delegation (LLM-driven based on sub-agent `description` fields). The ConversationCoachAgent can also be invoked directly from `POST /api/chats/{id}/suggest-reply` without going through the coordinator.
 
 ## Scoring Algorithm
 

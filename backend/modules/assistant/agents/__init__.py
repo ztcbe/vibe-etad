@@ -1,78 +1,187 @@
-"""Agent builder — creates ADK agents with injected context and tools."""
+"""Agent builder — creates ADK agent team with injected context and tools.
+
+Agent Team Architecture:
+  CoordinatorAgent (root)
+  ├── MatchmakerAgent (sub) — profile analysis + candidate search + like/pass
+  └── ConversationCoachAgent (sub) — match chat advice + reply suggestions
+
+The coordinator receives all assistant chat and routes to specialists.
+ConversationCoachAgent can also be invoked directly from suggest-reply API
+(bypassing the coordinator).
+"""
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from google.genai.types import GenerateContentConfig
 
-from modules.assistant.llm_adapter import VngCloudLlm
-from modules.assistant.tools import profile_tools, matching_tools
-from modules.assistant.prompts.zvibe_assistant import ZVIBE_ASSISTANT_SYSTEM_PROMPT
-from modules.assistant.prompts.profile_builder import PROFILE_BUILDER_SYSTEM_PROMPT
+from app.config import settings
+from modules.assistant.llm_adapter import build_llm
+from modules.assistant.tools import profile_tools, matching_tools, chat_tools, notification_tools
 
 
-def _build_llm() -> VngCloudLlm:
-    return VngCloudLlm()
+def build_coordinator_agent() -> LlmAgent:
+    """Build the root CoordinatorAgent with its sub-agent team.
 
-
-def build_zvibe_agent() -> LlmAgent:
-    """Build the root ZvibeAssistantAgent.
-
-    Agents:
-    - ZvibeAssistantAgent (root): handles all user interactions
-    - ProfileBuilderAgent (sub): onboarding and profile updates
-    - MatchmakerAgent (sub): candidate search, like, pass, list matches
+    Returns the root agent. Use this for assistant chat (/api/assistant/chat).
     """
-    profile_builder = LlmAgent(
-        name="ProfileBuilderAgent",
-        description="Xây dựng và cập nhật dating profile cho người dùng mới.",
-        model=_build_llm(),
-        instruction=PROFILE_BUILDER_SYSTEM_PROMPT,
+    matchmaker = _build_matchmaker_agent()
+    conversation_coach = _build_conversation_coach_agent()
+
+    cfg = settings.coordinator_llm()
+    coordinator = LlmAgent(
+        name="CoordinatorAgent",
+        description=(
+            "Trợ lý hẹn hò zvibe — điều phối yêu cầu người dùng, "
+            "xây dựng hồ sơ cá nhân, và chuyển đến chuyên gia phù hợp."
+        ),
+        model=build_llm(
+            model=cfg["model"],
+            api_key=cfg["api_key"],
+            api_base=cfg["api_base"],
+            max_tokens=cfg["max_tokens"],
+        ),
+        instruction=_COORDINATOR_INSTRUCTION,
         tools=[
             FunctionTool(profile_tools.get_my_profile),
-            FunctionTool(profile_tools.update_my_profile),
             FunctionTool(profile_tools.calculate_profile_completeness),
+            FunctionTool(profile_tools.update_my_profile),
+            FunctionTool(profile_tools.update_my_avatar),
+            FunctionTool(matching_tools.find_user_by_name),
+            FunctionTool(matching_tools.check_relationship_status),
+            FunctionTool(matching_tools.list_matched_profiles),
+            FunctionTool(matching_tools.get_matched_user_profile),
+            FunctionTool(matching_tools.get_candidate_profile),
+            FunctionTool(notification_tools.get_notifications),
         ],
-        generate_content_config=GenerateContentConfig(temperature=0.8, max_output_tokens=1500),
-        disallow_transfer_to_parent=False,
+        sub_agents=[matchmaker, conversation_coach],
+        generate_content_config=GenerateContentConfig(
+            temperature=settings.COORDINATOR_TEMPERATURE,
+            max_output_tokens=settings.COORDINATOR_MAX_OUTPUT_TOKENS,
+        ),
     )
 
-    matchmaker = LlmAgent(
+    return coordinator
+
+
+def build_conversation_coach_agent() -> LlmAgent:
+    """Build the ConversationCoachAgent for direct invocation.
+
+    Use this for suggest-reply API (/api/chats/{id}/suggest-reply)
+    to bypass the coordinator.
+    """
+    return _build_conversation_coach_agent()
+
+
+def _build_matchmaker_agent() -> LlmAgent:
+    """Build MatchmakerAgent — handles matching and profile analysis."""
+    cfg = settings.matchmaker_llm()
+    return LlmAgent(
         name="MatchmakerAgent",
-        description="Tìm kiếm người phù hợp cho user. Dùng khi user muốn tìm match, xem danh sách match, hoặc like/pass.",
-        model=_build_llm(),
-        instruction="""Bạn là MatchmakerAgent của zvibe. Nhiệm vụ: tìm người phù hợp cho user.
-
-Khi user muốn tìm match:
-1. Gọi `calculate_profile_completeness` trước — nếu chưa đủ thông tin, báo user cần bổ sung.
-2. Gọi `search_candidates` để lấy danh sách ứng viên.
-3. Trình bày từng ứng viên với: tên, tuổi, thành phố, điểm hợp, lý do hợp, điểm cần cân nhắc.
-4. KHÔNG tự ý like/pass nếu chưa có xác nhận rõ ràng từ user.
-5. Nếu user nói "thích", "like", "match" → gọi `like_candidate` và thông báo kết quả.
-6. Nếu user nói "bỏ qua", "pass", "không hợp" → gọi `pass_candidate`.
-
-Luôn dùng tiếng Việt tự nhiên, có dấu. Tone thân thiện, ấm áp.""",
+        description=(
+            "Tìm kiếm người phù hợp, phân tích hồ sơ, và quản lý match "
+            "(like/pass/xem danh sách match). Dùng khi user muốn tìm người "
+            "hợp vibe, xem danh sách match, like, hoặc pass."
+        ),
+        model=build_llm(
+            model=cfg["model"],
+            api_key=cfg["api_key"],
+            api_base=cfg["api_base"],
+            max_tokens=cfg["max_tokens"],
+        ),
+        instruction=_MATCHMAKER_INSTRUCTION,
         tools=[
             FunctionTool(profile_tools.calculate_profile_completeness),
             FunctionTool(matching_tools.search_candidates),
             FunctionTool(matching_tools.like_candidate),
             FunctionTool(matching_tools.pass_candidate),
             FunctionTool(matching_tools.list_my_matches),
+            FunctionTool(matching_tools.list_matched_profiles),
+            FunctionTool(matching_tools.find_user_by_name),
+            FunctionTool(matching_tools.check_relationship_status),
+            FunctionTool(matching_tools.get_matched_user_profile),
+            FunctionTool(matching_tools.get_candidate_profile),
         ],
-        generate_content_config=GenerateContentConfig(temperature=0.7, max_output_tokens=1500),
-        disallow_transfer_to_parent=False,
+        generate_content_config=GenerateContentConfig(
+            temperature=settings.MATCHMAKER_TEMPERATURE,
+            max_output_tokens=settings.MATCHMAKER_MAX_OUTPUT_TOKENS,
+        ),
     )
 
-    root = LlmAgent(
-        name="ZvibeAssistantAgent",
-        description="Trợ lý hẹn hò zvibe — giúp người dùng tạo hồ sơ, tìm match, chat, và được tư vấn.",
-        model=_build_llm(),
-        instruction=ZVIBE_ASSISTANT_SYSTEM_PROMPT,
+
+def _build_conversation_coach_agent() -> LlmAgent:
+    """Build ConversationCoachAgent — helps user talk to matches."""
+    cfg = settings.coach_llm()
+    return LlmAgent(
+        name="ConversationCoachAgent",
+        description=(
+            "Hỗ trợ người dùng trò chuyện với match — gợi ý tin nhắn trả lời, "
+            "tư vấn cách nói chuyện, giúp phá băng. Dùng khi user cần lời "
+            "khuyên về cách nhắn tin hoặc muốn gợi ý câu trả lời."
+        ),
+        model=build_llm(
+            model=cfg["model"],
+            api_key=cfg["api_key"],
+            api_base=cfg["api_base"],
+            max_tokens=cfg["max_tokens"],
+        ),
+        instruction=_CONVERSATION_COACH_INSTRUCTION,
         tools=[
-            FunctionTool(profile_tools.get_my_profile),
-            FunctionTool(profile_tools.calculate_profile_completeness),
+            FunctionTool(chat_tools.get_match_context),
+            FunctionTool(chat_tools.generate_suggested_replies),
+            FunctionTool(matching_tools.find_user_by_name),
+            FunctionTool(matching_tools.check_relationship_status),
+            FunctionTool(matching_tools.list_my_matches),
         ],
-        sub_agents=[profile_builder, matchmaker],
-        generate_content_config=GenerateContentConfig(temperature=0.8, max_output_tokens=1500),
-        disallow_transfer_to_parent=False,
+        generate_content_config=GenerateContentConfig(
+            temperature=settings.COACH_TEMPERATURE,
+            max_output_tokens=settings.COACH_MAX_OUTPUT_TOKENS,
+        ),
     )
 
-    return root
+
+# ── System Instructions ──────────────────────────────────────────────
+
+_COORDINATOR_INSTRUCTION = """Bạn là "trợ lý zvibe" - dating copilot duy nhất của user.
+[DANH TÍNH] Xưng "mình". TUYỆT ĐỐI KHÔNG nhắc đến Coordinator, MatchmakerAgent hay ConversationCoachAgent. User không được biết về cơ chế nội bộ.
+[LUỒNG XỬ LÝ CHÍNH]
+- Đầu phiên/Khi hỏi thông báo: Gọi `get_notifications()`. Báo tin tự nhiên nếu có.
+- Khách mới: Chào -> `calculate_profile_completeness` -> Hướng dẫn tạo hồ sơ.
+- Hỏi người cụ thể (theo tên): MẶC ĐỊNH gọi `check_relationship_status(name)` TRƯỚC.
+  + Nếu `not_found`: Gọi `list_matched_profiles()` -> So sánh tên gần đúng -> Hỏi xác nhận user.
+- Hỏi tính cách người đã match: Gọi `get_matched_user_profile(name)`. (Nếu `ambiguous`/`no_fuzzy_match`, hiển thị list cho user chọn).
+- Hỏi về ứng viên đang gợi ý (chưa match): Gọi `get_candidate_profile(candidate_user_id)`.
+[QUY TẮC BẮT BUỘC]
+1. HỎI XÁC NHẬN trước khi: like, unmatch, report, block, update profile.
+2. KHÔNG bịa data. KHÔNG đoán mò. Chỉ hỏi/đáp 1-2 ý mỗi lượt.
+3. BẢO MẬT: Không tiết lộ email, lat/lng, deal_breakers, red_flags, private_summary, embedding_vector.
+4. Tone: Tiếng Việt có dấu, thân thiện, ấm áp, tối đa 2 emoji/tin nhắn."""
+
+
+_MATCHMAKER_INSTRUCTION = """Bạn là "trợ lý zvibe". TUYỆT ĐỐI KHÔNG lộ danh tính MatchmakerAgent/chuyên gia. Xưng "mình".
+[LUỒNG TÌM MATCH]
+1. Kiểm tra: Gọi `calculate_profile_completeness`. Thiếu -> Yêu cầu bổ sung. Đủ -> Bước 2.
+2. Tìm kiếm: Gọi `search_candidates`.
+3. Trình bày: Nêu Tên, Tuổi, Thành phố, Điểm hợp, Lý do hợp, Điểm cân nhắc. KHÔNG tự ý like/pass.
+4. User thích -> Gọi `check_relationship_status` -> Gọi `like_candidate`.
+5. User bỏ qua -> Gọi `pass_candidate`.
+6. Xem match -> Gọi `list_my_matches`.
+[TRA CỨU PROFILE]
+- Hỏi người đã match: Gọi `get_matched_user_profile(name)`. (Xử lý `ambiguous` bằng cách cho user chọn).
+- Hỏi ứng viên đang gợi ý: Gọi `get_candidate_profile(candidate_user_id)`.
+- Tên không khớp (`not_found`): Gọi `list_matched_profiles()` -> Tìm gần đúng -> Hỏi xác nhận.
+[QUY TẮC] Trung thực, nêu cả ưu/khuyết điểm của ứng viên. Tone thân thiện."""
+
+
+_CONVERSATION_COACH_INSTRUCTION = """Bạn là "trợ lý zvibe". TUYỆT ĐỐI KHÔNG lộ danh tính ConversationCoachAgent/coach. Xưng "mình".
+[LUỒNG TƯ VẤN]
+1. User hỏi về đối tượng: MẶC ĐỊNH gọi `check_relationship_status(name)` TRƯỚC.
+   - Chưa match/Đã like: TỪ CHỐI tư vấn chat, khuyên tìm match hoặc chờ đợi.
+   - Đã pass: Báo user đã bỏ qua người này.
+   - Đã match: Gọi `get_match_context(match_id)` -> Bắt đầu tư vấn.
+2. Xin gợi ý tin nhắn: Gọi `generate_suggested_replies(match_id, tone)`. (Tones: natural, humorous, subtle, proactive, gentle, concise).
+[QUY TẮC OUTPUT GỢI Ý CHAT]
+- Luôn đưa 2-3 lựa chọn.
+- Gợi ý PHẢI hoàn chỉnh và có thể gửi đi ngay. KHÔNG chỉ là cụm từ gợi ý hay ý tưởng.
+- Xem xét ngữ cảnh chat, văn phong theo lịch sử ưu tiên hơn là tính cách chung của match.
+- Format: Mỗi lựa chọn < 35 từ.
+- Tiêu chí: Tôn trọng theo tình hình diễn biến chat. Ưu tiên thân thiện, dí dỏm nếu match có vibe đó. Nếu chat đang nguội, gợi ý câu mở đầu hoặc câu hỏi để phá băng. Nếu match hay trả lời dài, gợi ý tin nhắn chi tiết hơn. Nếu match trả lời ngắn, gợi ý tin nhắn ngắn gọn.
+- KHÔNG gợi ý tin nhắn nếu thấy vibe match không tốt hoặc chat đang rất tệ. Thay vào đó, tư vấn cách cải thiện vibe hoặc rời khỏi cuộc chat một cách lịch sự."""

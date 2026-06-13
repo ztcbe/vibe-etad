@@ -60,3 +60,6 @@ llm_provider
 greennode_info.txt
 .greennode.json
 .agentbase/
+.playwright-mcp
+.codegraph
+task.md

@@ -41,6 +41,10 @@ async def client():
     await _ensure_tables()
     await _truncate_all(engine)
 
+    # Initialize shared session service with test database
+    from modules.assistant.session import init_session_service, shutdown_session_service
+    await init_session_service(TEST_DB_URL)
+
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async def override_get_session():
@@ -54,6 +58,7 @@ async def client():
         yield ac
 
     app.dependency_overrides.pop(get_session, None)
+    await shutdown_session_service()
 
 
 @pytest_asyncio.fixture

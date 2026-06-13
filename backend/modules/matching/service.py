@@ -301,6 +301,11 @@ async def list_matches(db: AsyncSession, user_id: uuid.UUID) -> dict:
         )
         unread_count = unread.scalar() or 0
 
+        # Compute online status (online if active in last 5 minutes)
+        is_online = False
+        if other_user and other_user.last_active_at:
+            is_online = (datetime.now(timezone.utc) - other_user.last_active_at).total_seconds() < 300
+
         matched_items.append({
             "match_id": match.id,
             "user": {
@@ -308,6 +313,7 @@ async def list_matches(db: AsyncSession, user_id: uuid.UUID) -> dict:
                 "display_name": profile.display_name if profile else None,
                 "age": _calculate_age(other_user.date_of_birth) if other_user else None,
                 "avatar_url": profile.avatar_url if profile else None,
+                "is_online": is_online,
             },
             "last_message": {
                 "content": last_msg_row.content,

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>zvibe — Hẹn hò có AI đồng hành</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🤍</text></svg>">
 <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
@@ -28,9 +29,9 @@
       <!-- Login form -->
       <div id="loginForm">
         <label class="field-label">Username</label>
-        <input class="input-field" id="loginUser" type="text" placeholder="username" value="linh">
+        <input class="input-field" id="loginUser" type="text" placeholder="username">
         <label class="field-label" style="margin-top:10px">Mật khẩu</label>
-        <input class="input-field" id="loginPass" type="password" placeholder="••••••••" value="demo123456">
+        <input class="input-field" id="loginPass" type="password" placeholder="••••••••">
         <div class="field-error" id="authErr"></div>
         <button class="btn btn-primary" onclick="Auth.login()">Đăng nhập</button>
         <div class="switch-link" onclick="Auth.toggleForm()">Chưa có tài khoản? <b>Đăng ký</b></div>
@@ -59,7 +60,6 @@
     <div id="app-topbar">
       <div class="wordmark" onclick="Router.go('home')">zvibe<span class="dot">.</span></div>
       <div class="topbar-right">
-        <div class="completeness">Hồ sơ <span id="compLabel">0</span>% <div class="completeness-bar"><div id="compBar" style="width:0%"></div></div></div>
         <div class="icon-btn" onclick="Router.go('home')" title="Trợ lý">🤍</div>
         <div class="icon-btn" onclick="Auth.logout()" title="Đăng xuất">🚪</div>
       </div>
@@ -84,22 +84,10 @@
         <div class="chat-area">
           <div class="chat-scroll" id="homeChatScroll"></div>
           <div class="chat-input-bar">
-            <div class="attach-btn" onclick="toast('Tính năng đang phát triển 📎')">📎</div>
+            <div class="attach-btn" title="Đính kèm ảnh" onclick="document.getElementById('homeFileInput').click()">📎</div>
+            <input type="file" id="homeFileInput" accept="image/jpeg,image/png" style="display:none" onchange="Assistant._handleUpload(event)">
             <input class="chat-input" id="homeChatInput" placeholder="Nhắn gì đó với trợ lý..." onkeydown="if(event.key==='Enter')Assistant.send()">
             <div class="send-btn" onclick="Assistant.send()">➤</div>
-          </div>
-        </div>
-        <div id="context-panel">
-          <div class="context-card">
-            <h4>Vibe của bạn</h4>
-            <p id="ctxVibe">Đang tải...</p>
-            <div class="tag-list" id="ctxTags"></div>
-          </div>
-          <div class="context-card">
-            <h4>Gợi ý nhanh</h4>
-            <button class="quick-action" onclick="Assistant.quickFind()">🔍 Tìm người hợp vibe</button>
-            <button class="quick-action" onclick="Router.go('matches')">💞 Xem danh sách match</button>
-            <button class="quick-action" onclick="Router.go('profile')">📝 Xem hồ sơ của tôi</button>
           </div>
         </div>
       </div>
@@ -175,6 +163,21 @@
           <div class="admin-stats" id="adminStats"></div>
           <h3 style="font-family:'Caveat',cursive;font-size:1.2rem;margin:16px 0 8px">👥 Users</h3>
           <div style="overflow-x:auto"><table class="admin-table"><thead><tr><th>Username</th><th>Tên</th><th>Role</th><th>Status</th><th>Ngày sinh</th><th>Hồ sơ</th></tr></thead><tbody id="adminUserTable"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- ════ CONTEXT PANEL (right column, home screen only) ════ -->
+      <div id="context-panel">
+        <div class="context-card">
+          <h4>Vibe của bạn</h4>
+          <p id="ctxVibe">Đang tải...</p>
+          <div class="tag-list" id="ctxTags"></div>
+        </div>
+        <div class="context-card">
+          <h4>Gợi ý nhanh</h4>
+          <button class="quick-action" onclick="Assistant.quickFind()">🔍 Tìm người hợp vibe</button>
+          <button class="quick-action" onclick="Router.go('matches')">💞 Xem danh sách match</button>
+          <button class="quick-action" onclick="Router.go('profile')">📝 Xem hồ sơ của tôi</button>
         </div>
       </div>
 

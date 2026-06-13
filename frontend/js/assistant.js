@@ -7,6 +7,10 @@ const Assistant = {
   _loading: false,
 
   async init() {
+    // Clear previous state — prevents old chat from showing after logout/register
+    this._sessionId = null;
+    document.getElementById('homeChatScroll').innerHTML = '';
+
     // Load profile for context panel
     const prof = await api.myProfile();
     if (prof.success) {
@@ -78,6 +82,17 @@ const Assistant = {
           if (action.type === 'candidate_cards' && action.payload?.cards) {
             action.payload.cards.forEach(card => this._addCandidateCard(card));
           }
+          if (action.type === 'profile_summary_card') {
+            // Profile was updated — refresh profile data + UI immediately
+            api.myProfile().then(p => {
+              if (p.success) {
+                State.set('profile', p.data);
+                State.set('completeness', p.data.completeness_score || 0);
+                Router.updateTopbar();
+                _updateAllAvatars(p.data.avatar_url);
+              }
+            });
+          }
         });
       }
     } else {
@@ -90,8 +105,14 @@ const Assistant = {
     const row = document.createElement('div');
     row.className = `msg-row${role === 'user' ? ' user' : ''}`;
     const content = role === 'user' ? escapeHtml(text) : marked.parse(text);
+    // Show actual avatar image if available, else fallback emoji
+    let userAvatar = '🌿';
+    const profile = State.get('profile');
+    if (role === 'user' && profile?.avatar_url) {
+      userAvatar = `<img src="${profile.avatar_url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    }
     row.innerHTML = `
-      <div class="avatar avatar-sm avatar-placeholder ${role === 'user' ? 'user-av' : 'ai'}" style="background:${role === 'user' ? 'var(--teal-soft)' : 'var(--lavender-soft)'}">${role === 'user' ? '🌿' : '🤍'}</div>
+      <div class="avatar avatar-sm avatar-placeholder ${role === 'user' ? 'user-av' : 'ai'}" style="background:${role === 'user' ? 'var(--teal-soft)' : 'var(--lavender-soft)'}">${role === 'user' ? userAvatar : '🤍'}</div>
       <div class="bubble ${role}">${content}</div>
     `;
     scroll.appendChild(row);
@@ -164,11 +185,76 @@ const Assistant = {
     }
   },
 
+  async _handleUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Show uploading indicator in chat
+    this._addBubble('user', '⏳ Đang tải ảnh lên...');
+    const scroll = document.getElementById('homeChatScroll');
+
+    const resp = await api.uploadAvatar(file);
+    // Remove loading bubble
+    const bubbles = scroll.querySelectorAll('.bubble.user');
+    const lastBubble = bubbles[bubbles.length - 1];
+    if (lastBubble && lastBubble.textContent.includes('Đang tải ảnh')) {
+      lastBubble.closest('.msg-row')?.remove();
+    }
+
+    if (resp.success) {
+      const imageUrl = resp.data.url;
+      // Update all avatar displays immediately
+      _updateAllAvatars(imageUrl);
+
+      // Update profile state
+      const prof = State.get('profile') || {};
+      prof.avatar_url = imageUrl;
+      State.set('profile', prof);
+
+      // Show success in chat
+      this._addBubble('ai', '✅ Ảnh đại diện của bạn đã được cập nhật! Bạn có thể xem ở phần Hồ sơ.');
+
+      // Also update profile screen if visible
+      const profAvatar = document.getElementById('profileAvatar');
+      if (profAvatar) {
+        profAvatar.innerHTML = `<img src="${imageUrl}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+      }
+    } else {
+      this._addBubble('ai', '❌ Không thể tải ảnh lên: ' + (resp.error?.message || 'Lỗi không xác định'));
+    }
+
+    // Reset file input
+    event.target.value = '';
+  },
+
   quickFind() {
     document.getElementById('homeChatInput').value = 'Tìm cho mình người hợp vibe đi';
     this.send();
   },
 };
+
+function _updateAllAvatars(url) {
+  if (!url) return;
+  const imgTag = `<img src="${url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+
+  // Update mini-avatar in sidebar
+  const miniAvatar = document.querySelector('.mini-avatar');
+  if (miniAvatar) miniAvatar.innerHTML = imgTag;
+
+  // Update profile screen avatar
+  const profAvatar = document.getElementById('profileAvatar');
+  if (profAvatar) profAvatar.innerHTML = imgTag;
+
+  // Update all user message avatars in assistant chat
+  document.querySelectorAll('#homeChatScroll .msg-row.user .avatar.user-av').forEach(el => {
+    el.innerHTML = imgTag;
+  });
+
+  // Update all user message avatars in 1-1 chat
+  document.querySelectorAll('#chat11Scroll .msg-row.user .avatar').forEach(el => {
+    el.innerHTML = imgTag;
+  });
+}
 
 function escapeHtml(str) {
   if (!str) return '';

@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import Depends, Query, WebSocket, WebSocketException
 from fastapi.security import OAuth2PasswordBearer
@@ -35,6 +36,13 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None:
         raise UnauthorizedError(message="User not found")
+
+    # Update last_active_at (throttled: only if > 60s since last update)
+    now = datetime.now(timezone.utc)
+    if user.last_active_at is None or (now - user.last_active_at).total_seconds() > 60:
+        user.last_active_at = now
+        await db.commit()
+
     return user
 
 
@@ -69,4 +77,11 @@ async def get_current_user_ws(
     if user is None:
         await websocket.close(code=4001, reason="User not found")
         raise WebSocketException(code=4001, reason="User not found")
+
+    # Update last_active_at (throttled: only if > 60s since last update)
+    now = datetime.now(timezone.utc)
+    if user.last_active_at is None or (now - user.last_active_at).total_seconds() > 60:
+        user.last_active_at = now
+        await db.commit()
+
     return user

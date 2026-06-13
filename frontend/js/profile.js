@@ -18,6 +18,14 @@ const Profile = {
     State.set('profile', p);
     const age = State.get('user')?.date_of_birth ? calcAge(State.get('user').date_of_birth) : '';
 
+    // Show actual avatar or fallback
+    const avatarEl = document.getElementById('profileAvatar');
+    if (p.avatar_url) {
+      avatarEl.innerHTML = `<img src="${p.avatar_url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    } else {
+      avatarEl.textContent = '🌿';
+    }
+
     document.getElementById('profileName').textContent = `${p.display_name || 'Chưa đặt tên'}, ${age}`;
     document.getElementById('profileCity').textContent = p.city || 'Chưa có thành phố';
     document.getElementById('profileBio').textContent = p.bio || p.public_summary || 'Chưa có giới thiệu. Hãy nói chuyện với trợ lý để cập nhật!';

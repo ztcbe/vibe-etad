@@ -29,10 +29,11 @@ const Matches = {
         item.onclick = () => Router.go('chat', { matchId: m.match_id, user: m.user });
         const preview = m.last_message ? m.last_message.content : 'Chưa có tin nhắn — bắt đầu chat?';
         const unread = m.unread_count > 0 ? '<div class="unread-dot"></div>' : '';
+        const onlineDot = m.user.is_online ? '<span class="online-dot" title="Đang hoạt động"></span>' : '';
         const time = m.matched_at ? timeAgo(m.matched_at) : '';
         item.innerHTML = `
           <div class="avatar match-avatar avatar-placeholder" style="background:var(--gold-soft)">${m.user.display_name?.[0] || '👤'}</div>
-          <div class="match-text"><div class="name">${m.user.display_name || '...'}, ${m.user.age || ''}</div><div class="preview">${preview}</div></div>
+          <div class="match-text"><div class="name">${m.user.display_name || '...'}, ${m.user.age || ''} ${onlineDot}</div><div class="preview">${preview}</div></div>
           <div class="match-meta">${time}${unread}</div>
         `;
         container.appendChild(item);

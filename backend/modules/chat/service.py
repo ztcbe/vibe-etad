@@ -34,6 +34,15 @@ async def get_messages(
     result = await db.execute(stmt)
     messages = list(result.scalars().all())
     messages.reverse()  # Return chronological order
+
+    # Auto-mark unread messages from the other user as READ
+    unread_ids = [
+        m.id for m in messages
+        if m.sender_user_id != user_id and m.status != MessageStatus.READ
+    ]
+    if unread_ids:
+        await mark_read(db, user_id, match_id, unread_ids)
+
     return messages
 
 
@@ -98,24 +107,15 @@ async def suggest_reply(
     db: AsyncSession, user_id: uuid.UUID, match_id: uuid.UUID,
     tone: str = "natural", message_id: uuid.UUID | None = None,
 ) -> list[str]:
-    """Generate AI-suggested replies based on chat context.
+    """Generate AI-suggested replies using ConversationCoachAgent directly.
 
-    In production, this calls the LLM. For MVP, returns template suggestions.
+    Bypasses the coordinator — invokes ConversationCoachAgent with match context
+    to produce 2-3 personalized Vietnamese reply suggestions.
     Per v0.2 §5.2: always 2-3 items, each ≤35 words, correct tone.
     """
     await _verify_match_participant(db, user_id, match_id)
 
-    # Get recent messages for context
-    recent = await db.execute(
-        select(ChatMessage)
-        .where(ChatMessage.match_id == match_id)
-        .order_by(ChatMessage.created_at.desc())
-        .limit(10)
-    )
-    recent_msgs = list(recent.scalars().all())
-    recent_msgs.reverse()
-
-    # Get the other user's name
+    # Get the other user's name for fallback
     match = await db.get(Match, match_id)
     other_id = match.user_b_id if match.user_a_id == user_id else match.user_a_id
     other_profile = await db.execute(
@@ -124,45 +124,160 @@ async def suggest_reply(
     profile = other_profile.scalar_one_or_none()
     other_name = profile.display_name if profile and profile.display_name else "bạn"
 
-    # Get last message from the other person
-    last_other_msg = None
-    for msg in reversed(recent_msgs):
-        if msg.sender_user_id != user_id:
-            last_other_msg = msg.content
-            break
+    try:
+        suggestions = await _ai_suggest_replies(db, user_id, match_id, tone)
+        if suggestions and len(suggestions) >= 2:
+            return suggestions[:3]
+    except Exception as e:
+        logger.warning(f"AI suggest_reply failed, falling back to templates: {e}")
 
-    # Generate tone-appropriate suggestions
-    suggestions = _generate_template_suggestions(other_name, last_other_msg, tone)
-    return suggestions[:3]
+    # Fallback to template-based suggestions
+    return _fallback_template_suggestions(other_name, tone)
 
 
-def _generate_template_suggestions(other_name: str, last_msg: str | None, tone: str) -> list[str]:
-    """Generate contextual Vietnamese reply suggestions."""
-    tone_prefixes = {
-        "natural": ["Mình thấy", "Nghe có vẻ", "Bạn có vẻ"],
-        "humorous": ["Haha,", "Trời ơi,", "Cười xỉu,"],
-        "subtle": ["Có lẽ", "Mình nghĩ", "Cảm giác"],
-        "proactive": ["Hay là", "Cuối tuần này", "Mình muốn rủ"],
-        "gentle": ["Dạ,", "Cảm ơn bạn,", "Thật nhẹ nhàng,"],
-        "concise": ["Ok,", "Hay!", "Đồng ý nha,"],
+async def _ai_suggest_replies(
+    db: AsyncSession, user_id: uuid.UUID, match_id: uuid.UUID, tone: str,
+) -> list[str] | None:
+    """Invoke ConversationCoachAgent directly to generate AI reply suggestions."""
+    from google.adk import Runner
+    from google.genai.types import Content, Part
+
+    from modules.assistant.agents import build_conversation_coach_agent
+    from modules.assistant.session import get_session_service
+    from modules.assistant.tools import current_db, current_user_id
+
+    # Set contextvars for tool access
+    token_db = current_db.set(db)
+    token_user = current_user_id.set(str(user_id))
+
+    try:
+        agent = build_conversation_coach_agent()
+        session_service = get_session_service()
+        session_id = f"suggest_{match_id}_{tone}"
+        adk_session = await session_service.get_session(
+            app_name="zvibe_suggest",
+            user_id=str(user_id),
+            session_id=session_id,
+        )
+        if adk_session is None:
+            adk_session = await session_service.create_session(
+                app_name="zvibe_suggest",
+                user_id=str(user_id),
+                session_id=session_id,
+            )
+
+        runner = Runner(
+            agent=agent,
+            app_name="zvibe_suggest",
+            session_service=session_service,
+        )
+
+        prompt = (
+            f"Hãy gợi ý 2-3 câu trả lời bằng tiếng Việt với tone {tone} "
+            f"cho cuộc trò chuyện ở match {match_id}. "
+            f"Gọi tool get_match_context('{match_id}') để lấy ngữ cảnh trước. "
+            f"Sau đó dựa vào ngữ cảnh để tạo câu gợi ý phù hợp. "
+            f"Xuất kết quả dưới dạng danh sách, mỗi câu trên một dòng, bắt đầu bằng dấu gạch ngang (-). "
+            f"Không kèm giải thích dài dòng."
+        )
+
+        response_text = ""
+        async for event in runner.run_async(
+            user_id=str(user_id),
+            session_id=session_id,
+            new_message=Content(role="user", parts=[Part(text=prompt)]),
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    # Skip thinking/reasoning parts (Gemma, Qwen, DeepSeek-R1, etc.)
+                    is_thought = getattr(part, 'thought', False)
+                    if part.text and not is_thought:
+                        response_text += part.text
+
+        # Strip any remaining thinking XML tags (fallback safety net)
+        response_text = _strip_thinking(response_text)
+
+        # Parse suggestions from response
+        suggestions = _parse_suggestions(response_text)
+        return suggestions if suggestions else None
+
+    finally:
+        current_db.reset(token_db)
+        current_user_id.reset(token_user)
+
+
+def _parse_suggestions(text: str) -> list[str]:
+    """Parse AI response into a list of suggestion strings.
+
+    Handles common formats: dash-prefixed lines, numbered lines, or newline-separated.
+    """
+    lines = text.strip().split("\n")
+    suggestions = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        # Remove common prefixes: "- ", "1. ", "2. ", "• ", "* "
+        for prefix in ("- ", "• ", "* "):
+            if line.startswith(prefix):
+                line = line[len(prefix):]
+                break
+        else:
+            # Check for numbered prefix like "1. " or "1)"
+            import re
+            line = re.sub(r"^\d+[.)]\s*", "", line)
+        if line and len(line) >= 5:
+            suggestions.append(line)
+    return suggestions
+
+
+def _strip_thinking(text: str) -> str:
+    """Remove thinking/reasoning blocks from model output (fallback).
+
+    Primary filtering happens in the event loop via part.thought check.
+    This handles cases where the model embeds thinking as raw XML tags
+    in the text stream (some Qwen/DeepSeek deployments).
+    """
+    import re
+
+    for tag in ("think", "thinking", "thought"):
+        text = re.sub(
+            rf"<{tag}>.*?</{tag}>", "", text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
+    # Collapse multiple blank lines
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    return text.strip()
+
+
+def _fallback_template_suggestions(other_name: str, tone: str) -> list[str]:
+    """Minimal fallback when AI is unavailable."""
+    templates = {
+        "natural": [
+            f"Mình thấy {other_name} có vẻ thú vị đó. Kể thêm về bản thân bạn đi!",
+            f"Vibe của {other_name} khá hợp gu mình nè. Bạn thích làm gì cuối tuần?",
+            f"{other_name} có vẻ chân thành. Mình cũng đang tìm kiếm điều tương tự.",
+        ],
+        "humorous": [
+            f"Haha, {other_name} làm mình cười đó. Bạn có khiếu hài hước ghê!",
+            f"Trời ơi, {other_name} nói chuyện duyên dữ vậy. Bạn ở đâu ra vậy?",
+            f"Cười xỉu với vibe của {other_name}. Cuối tuần đi cà phê kể chuyện đi!",
+        ],
+        "proactive": [
+            f"Hay là cuối tuần này mình đi cà phê đi {other_name}?",
+            f"Mình muốn rủ {other_name} đi xem phim. Bạn thích thể loại gì?",
+            f"{other_name} ơi, mình nói chuyện hợp vibe quá. Gặp nhau thực tế nha?",
+        ],
+        "gentle": [
+            f"Dạ, cảm ơn {other_name} đã chia sẻ. Mình rất trân trọng điều đó.",
+            f"Thật nhẹ nhàng khi nói chuyện với {other_name}. Chúc bạn ngày mới vui vẻ!",
+            f"Cảm ơn {other_name}. Mình hy vọng sẽ được biết thêm về bạn.",
+        ],
     }
-
-    prefixes = tone_prefixes.get(tone, tone_prefixes["natural"])
-
-    templates = [
-        f"{prefixes[0]} {other_name} có vẻ là người thú vị đó. Kể thêm về bản thân bạn đi!",
-        f"{prefixes[1]} vibe của {other_name} khá hợp gu mình. Bạn thích làm gì cuối tuần?",
-        f"{prefixes[2]} {other_name} rất chân thành. Mình cũng đang tìm kiếm điều tương tự nè.",
-    ]
-
-    # If there's a last message, add a context-aware suggestion
-    if last_msg:
-        if "?" in last_msg:
-            templates.insert(0, f"Về câu hỏi của {other_name}, mình nghĩ là...")
-        elif len(last_msg) > 50:
-            templates.insert(0, f"Cảm ơn {other_name} đã chia sẻ. Mình cũng có trải nghiệm tương tự!")
-
-    return templates
+    defaults = templates.get(tone, templates["natural"])
+    return defaults[:3]
 
 
 async def _verify_match_participant(db: AsyncSession, user_id: uuid.UUID, match_id: uuid.UUID) -> Match:

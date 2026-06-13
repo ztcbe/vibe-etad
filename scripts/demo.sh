@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "╔══════════════════════════════════════════╗"
-echo "║     🎯 zvibe — Demo Launcher            ║"
+echo "║     🎯 zvibe — Demo Launcher             ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 

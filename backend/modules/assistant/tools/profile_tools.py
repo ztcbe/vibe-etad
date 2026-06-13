@@ -79,6 +79,7 @@ async def update_my_profile(
     deal_breakers: list | None = None,
     preferences: dict | None = None,
     public_summary: str | None = None,
+    avatar_url: str | None = None,
 ) -> dict:
     """Update the user's profile with new information. Only provide fields that changed.
 
@@ -96,6 +97,7 @@ async def update_my_profile(
         deal_breakers: List of deal-breaker items.
         preferences: Dict with preferred_age_min, preferred_age_max, preferred_distance_km, preferred_gender.
         public_summary: A short public-facing summary for the profile card.
+        avatar_url: URL of the user's avatar image (set by uploading via /api/media/upload).
     """
     db = current_db.get()
     user_id_str = current_user_id.get()
@@ -129,6 +131,8 @@ async def update_my_profile(
         update_data["preferences"] = preferences
     if public_summary is not None:
         update_data["public_summary"] = public_summary
+    if avatar_url is not None:
+        update_data["avatar_url"] = avatar_url
 
     if not update_data:
         return {"message": "Không có thông tin nào được cập nhật.", "updated_fields": []}
@@ -145,3 +149,18 @@ async def update_my_profile(
         "new_completeness_score": completeness.completeness_score,
         "missing_fields": completeness.missing_fields,
     }
+
+
+async def update_my_avatar(image_url: str) -> dict:
+    """Update the user's profile avatar to the given image URL.
+
+    Call this when the user sends a photo or requests to change their avatar.
+    The image_url should be a valid URL obtained from /api/media/upload.
+
+    Args:
+        image_url: URL of the uploaded avatar image (from /api/media/upload).
+
+    Returns:
+        Dict with success message and the new avatar URL.
+    """
+    return await update_my_profile(avatar_url=image_url)
