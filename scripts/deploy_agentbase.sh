@@ -17,7 +17,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SKILLS_DIR="$PROJECT_DIR/.claude/skills/agentbase/scripts"
 
 # ── Configuration ──
@@ -29,6 +29,7 @@ MAX_REPLICAS=1
 CPU_SCALE=50
 MEM_SCALE=50
 PLATFORM="linux/amd64"
+ENV_FILE="$PROJECT_DIR/.agentbase/runtime.env"
 
 # ── CR Config (auto-discovered) ──
 CR_REGISTRY="vcr.vngcloud.vn"
@@ -89,6 +90,15 @@ if [ ! -f "$PROJECT_DIR/Dockerfile" ]; then
   err "Dockerfile not found in $PROJECT_DIR"
 fi
 
+ENV_ARGS=()
+if [ -f "$ENV_FILE" ]; then
+  ENV_ARGS=(--env-file "$ENV_FILE")
+  ok "Runtime env file found: $ENV_FILE"
+else
+  warn "Runtime env file not found: $ENV_FILE"
+  warn "LLM calls may fail unless LLM_API_KEY is configured another way."
+fi
+
 ok "Prerequisites OK"
 
 # ── Step 1: Get CR repo info ──
@@ -113,6 +123,7 @@ if [ "$DRY_RUN" = true ]; then
   echo "Flavor:    $FLAVOR"
   echo "Network:   $NETWORK_MODE"
   echo "Replicas:  $MIN_REPLICAS-$MAX_REPLICAS"
+  echo "Env file:  ${ENV_FILE:-none}"
   echo "Commands:"
   echo "  docker build --platform $PLATFORM -t $FULL_IMAGE $PROJECT_DIR"
   echo "  bash $SKILLS_DIR/cr.sh credentials docker-login"
@@ -170,6 +181,7 @@ if [ -n "$EXISTING_ID" ]; then
       --image "$FULL_IMAGE" \
       --flavor "$FLAVOR" \
       --from-cr \
+      "${ENV_ARGS[@]}" \
       --min-replicas "$MIN_REPLICAS" \
       --max-replicas "$MAX_REPLICAS" \
       --cpu-scale "$CPU_SCALE" \

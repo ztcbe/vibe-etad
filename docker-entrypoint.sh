@@ -26,8 +26,8 @@ echo "     PostgreSQL ready"
 
 # 3. Setup database
 echo "[3/5] Setting up database..."
-su postgres -c "$PG_BIN/psql -U postgres -d postgres -c \"CREATE ROLE zvibe WITH LOGIN PASSWORD 'zvibe' CREATEDB;\""
-su postgres -c "$PG_BIN/psql -U postgres -d postgres -c \"CREATE DATABASE zvibe OWNER zvibe;\""
+su postgres -c "$PG_BIN/psql -U postgres -d postgres -tc \"SELECT 1 FROM pg_roles WHERE rolname='zvibe'\" | grep -q 1 || $PG_BIN/psql -U postgres -d postgres -c \"CREATE ROLE zvibe WITH LOGIN PASSWORD 'zvibe' CREATEDB;\""
+su postgres -c "$PG_BIN/psql -U postgres -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='zvibe'\" | grep -q 1 || $PG_BIN/psql -U postgres -d postgres -c \"CREATE DATABASE zvibe OWNER zvibe;\""
 su postgres -c "$PG_BIN/psql -U postgres -d zvibe -c \"CREATE EXTENSION IF NOT EXISTS vector;\""
 echo "     Database ready"
 

@@ -37,7 +37,7 @@ RUN echo 'DATABASE_URL=postgresql+asyncpg://zvibe:zvibe@localhost:5432/zvibe' > 
     && echo 'LLM_API_KEY=' >> backend/.env \
     && echo 'LLM_MODEL=google/gemma-4-31b-it' >> backend/.env \
     && echo 'MEDIA_UPLOAD_DIR=./uploads' >> backend/.env \
-    && echo 'CORS_ORIGINS=*' >> backend/.env \
+    && echo 'CORS_ORIGINS=https://endpoint-6102ade3-1953-43db-bac6-5b14e11ee503.agentbase-runtime.aiplatform.vngcloud.vn,http://localhost:8000,http://localhost:8080' >> backend/.env \
     && echo 'APP_ENV=production' >> backend/.env
 
 RUN chmod +x docker-entrypoint.sh \
