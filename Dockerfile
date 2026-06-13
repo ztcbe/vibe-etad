@@ -37,11 +37,11 @@ RUN echo 'DATABASE_URL=postgresql+asyncpg://zvibe:zvibe@localhost:5432/zvibe' > 
     && echo 'LLM_API_KEY=' >> backend/.env \
     && echo 'LLM_MODEL=google/gemma-4-31b-it' >> backend/.env \
     && echo 'MEDIA_UPLOAD_DIR=./uploads' >> backend/.env \
-    && echo 'CORS_ORIGINS=http://localhost:8000' >> backend/.env \
+    && echo 'CORS_ORIGINS=*' >> backend/.env \
     && echo 'APP_ENV=production' >> backend/.env
 
 RUN chmod +x docker-entrypoint.sh \
     && mkdir -p backend/uploads
 
-EXPOSE 8000
+EXPOSE 8080
 ENTRYPOINT ["./docker-entrypoint.sh"]

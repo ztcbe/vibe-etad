@@ -43,10 +43,10 @@ python ../scripts/seed_demo.py 2>/dev/null || echo "     (seed skipped)"
 
 echo ""
 echo "=========================================="
-echo "  zvibe ready at http://localhost:8000"
+echo "  zvibe ready at http://localhost:8080"
 echo "  Demo: linh / demo123456"
 echo "=========================================="
 echo ""
 
 cd /app/backend
-exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8080

@@ -57,3 +57,6 @@ htmlcov/
 .claude
 CLAUDE.md
 llm_provider
+greennode_info.txt
+.greennode.json
+.agentbase/

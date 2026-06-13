@@ -1,0 +1,15 @@
+.env
+.env.*
+.greennode.json
+.agentbase/
+__pycache__/
+*.pyc
+.git/
+.venv/
+*.egg-info/
+uploads/
+*.md
+docs/
+.claude/
+.codegraph/
+greennode_info.txt
