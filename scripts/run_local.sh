@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 IMAGE="zvibe:latest"
-HOST_PORT=8000
+HOST_PORT=9000
 CONTAINER_PORT=8080
 CONTAINER_NAME="zvibe"
 

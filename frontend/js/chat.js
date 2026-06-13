@@ -73,9 +73,10 @@ const Chat = {
     const isMine = msg.sender_user_id === State.get('user')?.id;
     const row = document.createElement('div');
     row.className = `msg-row${isMine ? ' user' : ''}`;
+    const content = marked.parse(msg.content);
     row.innerHTML = `
       <div class="avatar avatar-sm avatar-placeholder" style="background:${isMine ? 'var(--teal-soft)' : 'var(--lavender-soft)'}">${isMine ? '🌿' : (this._user?.display_name?.[0] || '👤')}</div>
-      <div class="bubble ${isMine ? 'user' : 'ai'}">${escapeHtml(msg.content)}</div>
+      <div class="bubble ${isMine ? 'user' : 'ai'}">${content}</div>
     `;
     scroll.appendChild(row);
     scroll.scrollTop = scroll.scrollHeight;

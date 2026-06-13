@@ -15,11 +15,9 @@ const Auth = {
   async login() {
     const username = document.getElementById('loginUser').value.trim();
     const password = document.getElementById('loginPass').value;
-    const ageChecked = document.getElementById('ageCheck').checked;
     const errEl = document.getElementById('authErr');
 
     if (!username || !password) { errEl.textContent = 'Vui lòng nhập username và mật khẩu'; return; }
-    if (!ageChecked) { errEl.textContent = 'Bạn phải xác nhận đủ 18 tuổi'; return; }
 
     errEl.textContent = '';
     const btn = document.querySelector('#loginForm .btn');
@@ -46,14 +44,12 @@ const Auth = {
     const pass = document.getElementById('regPass').value;
     const pass2 = document.getElementById('regPass2').value;
     const dob = document.getElementById('regDob').value;
-    const ageChecked = document.getElementById('ageCheckReg').checked;
     const errEl = document.getElementById('regErr');
 
     if (!username || !pass || !dob) { errEl.textContent = 'Vui lòng điền đầy đủ thông tin'; return; }
     if (username.length < 3) { errEl.textContent = 'Username tối thiểu 3 ký tự'; return; }
     if (pass !== pass2) { errEl.textContent = 'Mật khẩu không khớp'; return; }
     if (pass.length < 8) { errEl.textContent = 'Mật khẩu tối thiểu 8 ký tự'; return; }
-    if (!ageChecked) { errEl.textContent = 'Bạn phải xác nhận đủ 18 tuổi'; return; }
 
     errEl.textContent = '';
     const btn = document.querySelector('#registerForm .btn');

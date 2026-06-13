@@ -89,9 +89,10 @@ const Assistant = {
     const scroll = document.getElementById('homeChatScroll');
     const row = document.createElement('div');
     row.className = `msg-row${role === 'user' ? ' user' : ''}`;
+    const content = role === 'user' ? escapeHtml(text) : marked.parse(text);
     row.innerHTML = `
       <div class="avatar avatar-sm avatar-placeholder ${role === 'user' ? 'user-av' : 'ai'}" style="background:${role === 'user' ? 'var(--teal-soft)' : 'var(--lavender-soft)'}">${role === 'user' ? '🌿' : '🤍'}</div>
-      <div class="bubble ${role}">${escapeHtml(text)}</div>
+      <div class="bubble ${role}">${content}</div>
     `;
     scroll.appendChild(row);
     scroll.scrollTop = scroll.scrollHeight;

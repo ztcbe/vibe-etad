@@ -39,16 +39,16 @@ fi
 # ── 4. Start server ──
 echo ""
 echo "══════════════════════════════════════════"
-echo "  🚀 Starting zvibe on http://localhost:8000"
+echo "  🚀 Starting zvibe on http://localhost:9000"
 echo ""
 echo "  👤 Demo login:"
 echo "     Username: linh"
 echo "     Password: demo123456"
 echo ""
-echo "  🤍 AI Assistant: http://localhost:8000"
-echo "  📋 API Docs:     http://localhost:8000/docs"
-echo "  💞 Matches:      http://localhost:8000/#/matches"
+echo "  🤍 AI Assistant: http://localhost:9000"
+echo "  📋 API Docs:     http://localhost:9000/docs"
+echo "  💞 Matches:      http://localhost:9000/#/matches"
 echo "══════════════════════════════════════════"
 echo ""
 
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 9000

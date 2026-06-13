@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,12 +19,6 @@ async def register(db: AsyncSession, data: RegisterRequest) -> TokenResponse:
     if data.password != data.confirm_password:
         raise ValidationError(message="Passwords do not match", details={"field": "confirm_password"})
 
-    # Age check
-    today = date.today()
-    age = today.year - data.date_of_birth.year - ((today.month, today.day) < (data.date_of_birth.month, data.date_of_birth.day))
-    if age < 18:
-        raise ValidationError(message="You must be at least 18 years old", details={"field": "date_of_birth"})
-
     # Username uniqueness
     existing = await db.execute(select(User).where(User.username == data.username))
     if existing.scalar_one_or_none():
@@ -34,7 +28,7 @@ async def register(db: AsyncSession, data: RegisterRequest) -> TokenResponse:
         username=data.username,
         password_hash=hash_password(data.password),
         date_of_birth=data.date_of_birth,
-        is_age_verified=age >= 18,
+        is_age_verified=True,
     )
     db.add(user)
     await db.flush()
