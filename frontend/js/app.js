@@ -31,6 +31,14 @@ const State = {
   },
 };
 
+function iconSvg(name, className = 'ui-icon') {
+  return `<svg class="${className}" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
+}
+
+function avatarImage(url, alt = 'avatar') {
+  return `<img class="avatar-img" src="${url}" alt="${alt}">`;
+}
+
 const Router = {
   _current: 'auth',
 
@@ -200,7 +208,7 @@ const Router = {
         adminNav.className = 'nav-item';
         adminNav.setAttribute('data-route', 'admin');
         adminNav.onclick = () => Router.go('admin');
-        adminNav.textContent = '⚙️ Quản trị';
+        adminNav.innerHTML = `${iconSvg('admin')}<span>Quản trị</span>`;
         const sidebar = document.getElementById('sidebar');
         const divider = sidebar.querySelector('.nav-divider');
         divider.after(adminNav);
@@ -241,7 +249,7 @@ const Router = {
       // Update mini avatar
       const miniAvatar = document.querySelector('.mini-avatar');
       if (miniAvatar && profile.avatar_url) {
-        miniAvatar.innerHTML = `<img src="${profile.avatar_url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+        miniAvatar.innerHTML = avatarImage(profile.avatar_url);
       }
     }
   },

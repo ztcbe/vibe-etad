@@ -9,7 +9,7 @@ const Matches = {
 
     const resp = await api.myMatches();
     if (!resp.success) {
-      container.innerHTML = '<div class="empty-state"><div class="icon">🌱</div><h3>Chưa có match nào</h3><p>Hãy nói chuyện với trợ lý để tìm người hợp vibe!</p></div>';
+      container.innerHTML = `<div class="empty-state"><div class="icon">${iconSvg('heart')}</div><h3>Chưa có match nào</h3><p>Hãy nói chuyện với trợ lý để tìm người hợp vibe.</p></div>`;
       return;
     }
 
@@ -20,7 +20,7 @@ const Matches = {
     if (matched.length > 0) {
       const title = document.createElement('div');
       title.className = 'matches-group-title';
-      title.textContent = '💞 Đã match — có thể chat ngay';
+      title.innerHTML = `${iconSvg('heart')}<span>Đã match - có thể chat ngay</span>`;
       container.appendChild(title);
 
       matched.forEach(m => {
@@ -32,7 +32,7 @@ const Matches = {
         const onlineDot = m.user.is_online ? '<span class="online-dot" title="Đang hoạt động"></span>' : '';
         const time = m.matched_at ? timeAgo(m.matched_at) : '';
         item.innerHTML = `
-          <div class="avatar match-avatar avatar-placeholder" style="background:var(--gold-soft)">${m.user.display_name?.[0] || '👤'}</div>
+          <div class="avatar match-avatar avatar-placeholder">${m.user.display_name?.[0] || '?'}</div>
           <div class="match-text"><div class="name">${m.user.display_name || '...'}, ${m.user.age || ''} ${onlineDot}</div><div class="preview">${preview}</div></div>
           <div class="match-meta">${time}${unread}</div>
         `;
@@ -44,15 +44,15 @@ const Matches = {
     if (pending_sent.length > 0) {
       const title = document.createElement('div');
       title.className = 'matches-group-title';
-      title.textContent = '⏳ Đã thích, đang chờ phản hồi';
+      title.innerHTML = `${iconSvg('spark')}<span>Đã thích, đang chờ phản hồi</span>`;
       container.appendChild(title);
 
       pending_sent.forEach(p => {
         const item = document.createElement('div');
         item.className = 'match-item';
         item.innerHTML = `
-          <div class="avatar match-avatar avatar-placeholder" style="background:var(--sage-soft)">${p.user.display_name?.[0] || '👤'}</div>
-          <div class="match-text"><div class="name">${p.user.display_name || '...'}, ${p.user.age || ''}</div><div class="preview">Bạn đã thích — đang chờ phản hồi</div></div>
+          <div class="avatar match-avatar avatar-placeholder">${p.user.display_name?.[0] || '?'}</div>
+          <div class="match-text"><div class="name">${p.user.display_name || '...'}, ${p.user.age || ''}</div><div class="preview">Bạn đã thích - đang chờ phản hồi</div></div>
           <div class="match-meta">${timeAgo(p.liked_at)}</div>
         `;
         container.appendChild(item);
@@ -60,7 +60,7 @@ const Matches = {
     }
 
     if (matched.length === 0 && pending_sent.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="icon">🌱</div><h3>Chưa có match nào</h3><p>Hãy nói chuyện với trợ lý: "Tìm người hợp vibe đi!"</p></div>';
+      container.innerHTML = `<div class="empty-state"><div class="icon">${iconSvg('search')}</div><h3>Chưa có match nào</h3><p>Hãy nói chuyện với trợ lý: "Tìm người hợp vibe đi".</p></div>`;
     }
 
     // Update badge

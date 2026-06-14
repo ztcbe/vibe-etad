@@ -21,11 +21,11 @@ const Chat = {
     State.set('activeChatUser', user);
 
     document.getElementById('chat11Name').textContent = `${user.display_name || '...'}, ${user.age || ''}`;
-    document.getElementById('chat11Avatar').textContent = user.display_name?.[0] || '👤';
+    document.getElementById('chat11Avatar').textContent = user.display_name?.[0] || '?';
     const isOnline = user.is_online !== undefined ? user.is_online : true;
     const statusEl = document.getElementById('chat11Status');
-    statusEl.textContent = isOnline ? '● đang hoạt động' : '● không hoạt động';
-    statusEl.style.color = isOnline ? 'var(--sage)' : 'var(--ink-soft)';
+    statusEl.textContent = isOnline ? 'đang hoạt động' : 'không hoạt động';
+    statusEl.style.color = isOnline ? 'var(--teal)' : 'var(--ink-soft)';
 
     // Load history
     const scroll = document.getElementById('chat11Scroll');
@@ -36,7 +36,7 @@ const Chat = {
     if (resp.success && resp.data.length > 0) {
       resp.data.forEach(m => this._addMessage(m));
     } else {
-      scroll.innerHTML = `<div style="text-align:center;padding:40px;color:var(--ink-soft);font-size:0.88rem">Hãy bắt đầu trò chuyện với ${user.display_name || 'người ấy'}!</div>`;
+      scroll.innerHTML = `<div class="empty-state"><div class="icon">${iconSvg('chat')}</div><h3>Bắt đầu cuộc trò chuyện</h3><p>Gửi lời chào đầu tiên tới ${user.display_name || 'người ấy'}.</p></div>`;
     }
     scroll.scrollTop = scroll.scrollHeight;
 
@@ -77,7 +77,7 @@ const Chat = {
         } else if (data.event === 'match_unavailable') {
           toast('Match này không còn khả dụng', 'error');
           document.getElementById('chat11Input').disabled = true;
-          document.getElementById('chat11Status').textContent = '● không khả dụng';
+          document.getElementById('chat11Status').textContent = 'không khả dụng';
           document.getElementById('chat11Status').style.color = 'var(--danger)';
         } else if (data.event === 'error') {
           toast(data.data.message, 'error');
@@ -107,16 +107,18 @@ const Chat = {
     const row = document.createElement('div');
     row.className = `msg-row${isMine ? ' user' : ''}`;
     const content = marked.parse(msg.content);
-    // Show actual avatar image if available
-    let myAvatar = '🌿';
+    // Show actual avatar image if available.
+    let myAvatar = iconSvg('user', 'ui-icon avatar-symbol');
     if (isMine) {
       const profile = State.get('profile');
       if (profile?.avatar_url) {
-        myAvatar = `<img src="${profile.avatar_url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+        myAvatar = avatarImage(profile.avatar_url);
+      } else {
+        myAvatar = iconSvg('user', 'ui-icon avatar-symbol');
       }
     }
     row.innerHTML = `
-      <div class="avatar avatar-sm avatar-placeholder" style="background:${isMine ? 'var(--teal-soft)' : 'var(--lavender-soft)'}">${isMine ? myAvatar : (this._user?.display_name?.[0] || '👤')}</div>
+      <div class="avatar avatar-sm avatar-placeholder">${isMine ? myAvatar : (this._user?.display_name?.[0] || '?')}</div>
       <div class="bubble ${isMine ? 'user' : 'ai'}">${content}</div>
     `;
     scroll.appendChild(row);
@@ -160,7 +162,7 @@ const Chat = {
     }
 
     const itemsEl = document.getElementById('suggestItems');
-    itemsEl.innerHTML = '<div class="loading" style="padding:8px"><div class="spinner"></div></div>';
+    itemsEl.innerHTML = '<div class="loading loading-tight"><div class="spinner"></div></div>';
     tray.classList.add('show');
 
     const resp = await api.suggestReply(this._matchId);

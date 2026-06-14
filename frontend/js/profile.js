@@ -21,9 +21,9 @@ const Profile = {
     // Show actual avatar or fallback
     const avatarEl = document.getElementById('profileAvatar');
     if (p.avatar_url) {
-      avatarEl.innerHTML = `<img src="${p.avatar_url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+      avatarEl.innerHTML = avatarImage(p.avatar_url);
     } else {
-      avatarEl.textContent = '🌿';
+      avatarEl.innerHTML = iconSvg('user');
     }
 
     document.getElementById('profileName').textContent = `${p.display_name || 'Chưa đặt tên'}, ${age}`;
@@ -34,7 +34,7 @@ const Profile = {
     const vis = p.visibility_status;
     const visEl = document.getElementById('profileVisibility');
     visEl.className = `visibility-pill${vis === 'paused' ? ' paused' : vis === 'hidden' ? ' hidden' : ' active'}`;
-    const visLabels = { active: '● Đang hiển thị (Active)', paused: '⏸ Tạm ẩn (Paused)', hidden: '🔒 Đã ẩn (Hidden)' };
+    const visLabels = { active: 'Đang hiển thị (Active)', paused: 'Tạm ẩn (Paused)', hidden: 'Đã ẩn (Hidden)' };
     visEl.textContent = visLabels[vis] || vis;
 
     // Tags: hobbies + personality traits
@@ -48,7 +48,7 @@ const Profile = {
       if (Array.isArray(p.personality_traits)) allTags.push(...p.personality_traits);
       else if (typeof p.personality_traits === 'object') allTags.push(...Object.keys(p.personality_traits));
     }
-    tags.innerHTML = allTags.length > 0 ? allTags.map(t => `<span class="tag">${t}</span>`).join('') : '<span style="color:var(--ink-faint);font-size:0.82rem">Chưa có — cập nhật qua trợ lý</span>';
+    tags.innerHTML = allTags.length > 0 ? allTags.map(t => `<span class="tag">${t}</span>`).join('') : '<span class="profile-empty-note">Chưa có - cập nhật qua trợ lý</span>';
 
     // Dating goal
     const goalLabels = { serious: 'Tìm một mối quan hệ nghiêm túc, hướng tới gắn bó lâu dài.', casual: 'Tìm bạn, gặp gỡ nhẹ nhàng, không áp lực.', friends_first: 'Làm bạn trước, tìm hiểu từ từ.', not_sure: 'Đang khám phá, chưa xác định rõ mục tiêu.' };

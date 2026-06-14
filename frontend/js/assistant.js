@@ -41,7 +41,7 @@ const Assistant = {
     // Show welcome if no messages
     const scroll = document.getElementById('homeChatScroll');
     if (!scroll.querySelector('.msg-row')) {
-      this._addBubble('ai', 'Chào bạn! Mình là trợ lý của zvibe 👋 Mình có thể giúp bạn tạo hồ sơ, tìm người hợp vibe, xem danh sách match, và tư vấn cho bạn. Bạn muốn làm gì hôm nay?');
+      this._addBubble('ai', 'Chào bạn. Mình là trợ lý của zvibe. Mình có thể giúp bạn tạo hồ sơ, tìm người hợp vibe, xem danh sách match và tư vấn cách bắt đầu trò chuyện. Bạn muốn làm gì hôm nay?');
     }
   },
 
@@ -105,14 +105,14 @@ const Assistant = {
     const row = document.createElement('div');
     row.className = `msg-row${role === 'user' ? ' user' : ''}`;
     const content = role === 'user' ? escapeHtml(text) : marked.parse(text);
-    // Show actual avatar image if available, else fallback emoji
-    let userAvatar = '🌿';
+    // Show actual avatar image if available, else fallback icon.
+    let userAvatar = iconSvg('user', 'ui-icon avatar-symbol');
     const profile = State.get('profile');
     if (role === 'user' && profile?.avatar_url) {
-      userAvatar = `<img src="${profile.avatar_url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+      userAvatar = avatarImage(profile.avatar_url);
     }
     row.innerHTML = `
-      <div class="avatar avatar-sm avatar-placeholder ${role === 'user' ? 'user-av' : 'ai'}" style="background:${role === 'user' ? 'var(--teal-soft)' : 'var(--lavender-soft)'}">${role === 'user' ? userAvatar : '🤍'}</div>
+      <div class="avatar avatar-sm avatar-placeholder ${role === 'user' ? 'user-av' : 'ai'}">${role === 'user' ? userAvatar : iconSvg('spark', 'ui-icon avatar-symbol')}</div>
       <div class="bubble ${role}">${content}</div>
     `;
     scroll.appendChild(row);
@@ -126,7 +126,7 @@ const Assistant = {
     row.className = 'msg-row';
     row.id = 'typingIndicator';
     row.innerHTML = `
-      <div class="avatar avatar-sm avatar-placeholder" style="background:var(--lavender-soft)">🤍</div>
+      <div class="avatar avatar-sm avatar-placeholder">${iconSvg('spark', 'ui-icon avatar-symbol')}</div>
       <div class="bubble ai"><div class="typing-dots"><span></span><span></span><span></span></div></div>
     `;
     scroll.appendChild(row);
@@ -143,10 +143,10 @@ const Assistant = {
     const row = document.createElement('div');
     row.className = 'msg-row';
     row.innerHTML = `
-      <div class="avatar avatar-sm avatar-placeholder" style="background:var(--lavender-soft)">🤍</div>
+      <div class="avatar avatar-sm avatar-placeholder">${iconSvg('spark', 'ui-icon avatar-symbol')}</div>
       <div class="candidate-card">
         <div class="candidate-head">
-          <div class="avatar avatar-md avatar-placeholder" style="background:var(--teal-soft)">${card.display_name?.[0] || '👤'}</div>
+          <div class="avatar avatar-md avatar-placeholder">${card.display_name?.[0] || '?'}</div>
           <div class="candidate-info"><div class="name">${card.display_name}, ${card.age}</div><div class="meta">${card.city || ''} · ${goalLabel[card.dating_goal] || card.dating_goal || ''}</div></div>
           <div class="score-badge ${tierClass}">${card.score}%</div>
         </div>
@@ -157,7 +157,7 @@ const Assistant = {
         <div class="candidate-actions">
           <button onclick="Assistant._action('pass','${card.candidate_user_id}')">Bỏ qua</button>
           <button onclick="Assistant._action('ask','${card.candidate_user_id}')">Hỏi thêm</button>
-          <button class="primary" onclick="Assistant._action('like','${card.candidate_user_id}','${card.display_name}')">💖 Thích</button>
+          <button class="primary" onclick="Assistant._action('like','${card.candidate_user_id}','${card.display_name}')">Thích</button>
         </div>
       </div>
     `;
@@ -171,7 +171,7 @@ const Assistant = {
       if (resp.success && resp.data.is_mutual) {
         Celebration.show(resp.data.match_id, resp.data.user);
       } else if (resp.success) {
-        toast(`Đã gửi lời thích đến ${name || 'người này'}!`, 'success');
+        toast(`Đã gửi lời thích đến ${name || 'người này'}`, 'success');
       } else {
         toast(resp.error?.message || 'Lỗi', 'error');
       }
@@ -190,7 +190,7 @@ const Assistant = {
     if (!file) return;
 
     // Show uploading indicator in chat
-    this._addBubble('user', '⏳ Đang tải ảnh lên...');
+    this._addBubble('user', 'Đang tải ảnh lên...');
     const scroll = document.getElementById('homeChatScroll');
 
     const resp = await api.uploadAvatar(file);
@@ -212,15 +212,15 @@ const Assistant = {
       State.set('profile', prof);
 
       // Show success in chat
-      this._addBubble('ai', '✅ Ảnh đại diện của bạn đã được cập nhật! Bạn có thể xem ở phần Hồ sơ.');
+      this._addBubble('ai', 'Ảnh đại diện của bạn đã được cập nhật. Bạn có thể xem ở phần Hồ sơ.');
 
       // Also update profile screen if visible
       const profAvatar = document.getElementById('profileAvatar');
       if (profAvatar) {
-        profAvatar.innerHTML = `<img src="${imageUrl}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+        profAvatar.innerHTML = avatarImage(imageUrl);
       }
     } else {
-      this._addBubble('ai', '❌ Không thể tải ảnh lên: ' + (resp.error?.message || 'Lỗi không xác định'));
+      this._addBubble('ai', 'Không thể tải ảnh lên: ' + (resp.error?.message || 'Lỗi không xác định'));
     }
 
     // Reset file input
@@ -235,7 +235,7 @@ const Assistant = {
 
 function _updateAllAvatars(url) {
   if (!url) return;
-  const imgTag = `<img src="${url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+  const imgTag = avatarImage(url);
 
   // Update mini-avatar in sidebar
   const miniAvatar = document.querySelector('.mini-avatar');
