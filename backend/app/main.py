@@ -5,14 +5,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, WebSocket, Depends
 from starlette.types import ASGIApp, Scope, Receive, Send
 from starlette.staticfiles import StaticFiles as _StaticFiles
+from starlette.responses import Response as StarletteResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 
 class NoCacheStaticFiles(_StaticFiles):
     """StaticFiles that sends no-cache headers (dev mode)."""
 
-    def file_response(self, *args, **kwargs) -> Response:
-        from starlette.responses import Response as StarletteResponse
+    def file_response(self, *args, **kwargs) -> StarletteResponse:
         resp = super().file_response(*args, **kwargs)
         resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         resp.headers["Pragma"] = "no-cache"

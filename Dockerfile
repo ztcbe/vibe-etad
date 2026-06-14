@@ -1,44 +1,41 @@
 # zvibe — all-in-one Docker image (app + PostgreSQL/pgvector)
-FROM python:3.11-slim
+# FROM python:3.11-slim
+FROM ubuntu:24.04
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 
-# ── Install PostgreSQL 16 + pgvector ──
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl gnupg lsb-release ca-certificates \
-    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
+
+# # ── Install PostgreSQL 16 + pgvector ──
+RUN apt-get update 
+RUN apt-get install -y python3 python3-venv
+RUN apt-get install -y --no-install-recommends curl gnupg lsb-release ca-certificates 
+RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+RUN apt-get update 
+RUN export DEBIAN_FRONTEND=noninteractive && apt-get install -y --no-install-recommends \
     postgresql-16 \
-    postgresql-16-pgvector \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    postgresql-16-pgvector
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── Configure PostgreSQL ──
 ENV PGDATA=/var/lib/postgresql/data
 ENV PGUSER=zvibe PGPASSWORD=zvibe PGDATABASE=zvibe
-RUN mkdir -p "$PGDATA" /run/postgresql && chown -R postgres:postgres "$PGDATA" /run/postgresql
+RUN mkdir -p "$PGDATA" /run/postgresql && chown -R postgres:postgres "$PGDATA" /run/postgresql 
 
 # ── Install Python deps ──
 WORKDIR /app
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
 # ── Copy source ──
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
-COPY scripts/seed_demo.py ./scripts/
+RUN mkdir -p scripts
+COPY seed_demo.py ./scripts/
 COPY docker-entrypoint.sh .
 
-# ── Create .env ──
-RUN echo 'DATABASE_URL=postgresql+asyncpg://zvibe:zvibe@localhost:5432/zvibe' > backend/.env \
-    && echo 'JWT_SECRET=zvibe-demo-secret-change-in-production' >> backend/.env \
-    && echo 'JWT_ACCESS_EXPIRE_MINUTES=30' >> backend/.env \
-    && echo 'JWT_REFRESH_EXPIRE_DAYS=7' >> backend/.env \
-    && echo 'LLM_BASE_URL=https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1' >> backend/.env \
-    && echo 'LLM_API_KEY=' >> backend/.env \
-    && echo 'LLM_MODEL=google/gemma-4-31b-it' >> backend/.env \
-    && echo 'MEDIA_UPLOAD_DIR=./uploads' >> backend/.env \
-    && echo 'CORS_ORIGINS=https://endpoint-6102ade3-1953-43db-bac6-5b14e11ee503.agentbase-runtime.aiplatform.vngcloud.vn,http://localhost:8000,http://localhost:8080' >> backend/.env \
-    && echo 'APP_ENV=production' >> backend/.env
+RUN cd backend && rm -rf .venv && \
+    python3 -m venv .venv && \
+    source .venv/bin/activate && \
+    pip install "."
+
 
 RUN chmod +x docker-entrypoint.sh \
     && mkdir -p backend/uploads

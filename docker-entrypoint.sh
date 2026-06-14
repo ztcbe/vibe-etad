@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 set -euo pipefail
 
 PG_BIN=/usr/lib/postgresql/16/bin
@@ -34,12 +34,12 @@ echo "     Database ready"
 # 4. Run migrations
 echo "[4/5] Running migrations..."
 cd /app/backend
-python -m alembic upgrade head
-echo "     Migrations complete"
+source .venv/bin/activate
+alembic upgrade head
 
 # 5. Seed demo data
 echo "[5/5] Seeding demo data..."
-python ../scripts/seed_demo.py 2>/dev/null || echo "     (seed skipped)"
+python3 ../scripts/seed_demo.py
 
 echo ""
 echo "=========================================="
@@ -48,5 +48,4 @@ echo "  Demo: linh / demo123456"
 echo "=========================================="
 echo ""
 
-cd /app/backend
-exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8080
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8080
