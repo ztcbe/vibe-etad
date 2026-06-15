@@ -199,7 +199,7 @@ else
     --max-replicas "$MAX_REPLICAS" \
     --cpu-scale "$CPU_SCALE" \
     --mem-scale "$MEM_SCALE" \
-    --description "zvibe AI dating app - FastAPI + PostgreSQL/pgvector" 2>&1)
+    --description "zvibe AI dating app - GoogleADK + FastAPI + PostgreSQL/pgvector" 2>&1)
   RUNTIME_ID=$(echo "$CREATE_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
   ok "Runtime created: $RUNTIME_ID"
 fi

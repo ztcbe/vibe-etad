@@ -14,7 +14,6 @@ from db.models.audit import AIToolLog
 from modules.assistant.agents import build_coordinator_agent
 from modules.assistant.session import get_session_service
 from modules.assistant.tools import current_db, current_user_id, current_session_id
-from modules.assistant.tools.notification_tools import get_notifications
 from modules.assistant.schemas import ChatRequest, ChatResponse, ActionPayload
 from common.errors import NotFoundError
 from common.enums import AssistantRole
@@ -113,63 +112,6 @@ async def chat(db: AsyncSession, user_id: uuid.UUID, data: ChatRequest) -> ChatR
         db.add(user_msg)
         await db.commit()
 
-        # Check for pending notifications and inject into conversation context
-        notifications = {}
-        # Load previously shown notification IDs from session state to avoid repeating
-        session_state = session.state or {}
-        shown_ids = session_state.get("shown_notification_ids", {})
-        try:
-            notifications = await get_notifications(
-                shown_like_user_ids=set(shown_ids.get("like_user_ids", [])),
-                shown_match_ids=set(shown_ids.get("match_ids", [])),
-                shown_unread_match_ids=set(shown_ids.get("unread_match_ids", [])),
-            )
-            # Persist newly shown IDs to session state to prevent repeats
-            if notifications.get("shown_ids"):
-                shown_ids["like_user_ids"] = list(set(shown_ids.get("like_user_ids", [])) | set(notifications["shown_ids"].get("like_user_ids", [])))
-                shown_ids["match_ids"] = list(set(shown_ids.get("match_ids", [])) | set(notifications["shown_ids"].get("match_ids", [])))
-                shown_ids["unread_match_ids"] = list(set(shown_ids.get("unread_match_ids", [])) | set(notifications["shown_ids"].get("unread_match_ids", [])))
-                session_state["shown_notification_ids"] = shown_ids
-                session.state = session_state
-        except Exception as e:
-            logger.warning(f"Failed to fetch notifications: {e}")
-
-        # Build the effective message — inject notification context if present
-        effective_message = data.message
-        if notifications.get("has_notifications"):
-            notif_lines = ["[THÔNG BÁO — không hiển thị nguyên văn, hãy diễn đạt tự nhiên bằng tiếng Việt]"]
-
-            if notifications.get("pending_likes"):
-                for like in notifications["pending_likes"]:
-                    name = like.get("display_name", "ai đó")
-                    age = like.get("age", "")
-                    age_str = f", {age}t" if age else ""
-                    notif_lines.append(
-                        f"- {name}{age_str} vừa thích bạn. "
-                        f"Hỏi user có muốn xem hồ sơ và like lại không."
-                    )
-
-            if notifications.get("unread_messages"):
-                for msg in notifications["unread_messages"]:
-                    name = msg.get("display_name", "ai đó")
-                    count = msg.get("unread_count", 0)
-                    preview = msg.get("last_message_preview", "")
-                    notif_lines.append(
-                        f"- {name} đã gửi {count} tin nhắn mới (match_id={msg.get('match_id')}). "
-                        f"Preview: {preview[:50]}. Hỏi user có muốn mình gợi ý trả lời không."
-                    )
-
-            if notifications.get("new_matches"):
-                for m in notifications["new_matches"]:
-                    name = m.get("display_name", "ai đó")
-                    notif_lines.append(
-                        f"- Bạn vừa match với {name} (match_id={m.get('match_id')}). "
-                        f"Chúc mừng và khuyến khích user bắt đầu trò chuyện."
-                    )
-
-            notif_context = "\n".join(notif_lines)
-            effective_message = f"{notif_context}\n\n---\nTin nhắn của user: {data.message}"
-
         # Run the agent
         runner = Runner(
             agent=agent,
@@ -187,7 +129,7 @@ async def chat(db: AsyncSession, user_id: uuid.UUID, data: ChatRequest) -> ChatR
         async for event in runner.run_async(
             user_id=str(user_id),
             session_id=str(session.id),
-            new_message=Content(role="user", parts=[Part(text=effective_message)]),
+            new_message=Content(role="user", parts=[Part(text=data.message)]),
         ):
             # Collect events from the agent
             if event.content and event.content.parts:
@@ -333,3 +275,33 @@ def _is_confirmation(message: str) -> bool:
     lower = message.lower()
     confirm_phrases = ["đúng vậy", "đồng ý", "ok", "được", "có", "chắc chắn", "yes", "đúng", "làm đi", "thích luôn"]
     return any(phrase in lower for phrase in confirm_phrases)
+
+
+async def mark_messages_read(db: AsyncSession, user_id: uuid.UUID, session_id: uuid.UUID) -> int:
+    """Mark all unread assistant messages in a session as read. Returns count."""
+    from sqlalchemy import update
+    stmt = (
+        update(AssistantMessage)
+        .where(
+            AssistantMessage.session_id == session_id,
+            AssistantMessage.user_id == user_id,
+            AssistantMessage.role == AssistantRole.ASSISTANT,
+            AssistantMessage.is_read == False,
+        )
+        .values(is_read=True)
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+    return result.rowcount
+
+
+async def get_unread_count(db: AsyncSession, user_id: uuid.UUID) -> int:
+    """Count unread assistant messages across all sessions."""
+    result = await db.execute(
+        select(func.count(AssistantMessage.id)).where(
+            AssistantMessage.user_id == user_id,
+            AssistantMessage.role == AssistantRole.ASSISTANT,
+            AssistantMessage.is_read == False,
+        )
+    )
+    return result.scalar() or 0

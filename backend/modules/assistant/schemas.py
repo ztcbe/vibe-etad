@@ -34,6 +34,7 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     metadata: dict | None = Field(default=None, validation_alias="metadata_")
+    is_read: bool = True
     created_at: datetime
 
     model_config = {"from_attributes": True, "populate_by_name": True}

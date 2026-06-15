@@ -9,6 +9,7 @@ const State = {
     completeness: 0,
     currentScreen: 'auth',
     matchCount: 0,
+    notificationCount: 0,
     activeChatId: null,
     activeChatUser: null,
     assistantSessionId: null,
@@ -24,6 +25,7 @@ const State = {
     this._data.profile = null;
     this._data.completeness = 0;
     this._data.matchCount = 0;
+    this._data.notificationCount = 0;
     this._data.activeChatId = null;
     this._data.activeChatUser = null;
     this._data.assistantSessionId = null;
@@ -56,6 +58,7 @@ const Router = {
     if (screen === 'auth') {
       // Kill any active WebSocket before hiding
       if (typeof Chat !== 'undefined' && Chat.cleanup) Chat.cleanup();
+      Notifications.disconnect();
       document.getElementById('app-shell').style.display = 'none';
       document.getElementById('screen-auth').classList.add('active');
       State.set('currentScreen', 'auth');
@@ -160,6 +163,8 @@ const Router = {
       State.set('completeness', resp.data.completeness_score || 0);
       this.updateTopbar();
       this._updateAdminNav(resp.data.role);
+      // Open global notification WebSocket
+      Notifications.connect();
       // Navigate based on URL hash or default to home
       const parsed = this._parseHash();
       if (parsed && parsed.screen !== 'auth') {
@@ -196,6 +201,7 @@ const Router = {
   _clearAndGoAuth() {
     localStorage.removeItem('zvibe_token');
     localStorage.removeItem('zvibe_refresh');
+    Notifications.disconnect();
     State.clear();
     this.go('auth');
   },

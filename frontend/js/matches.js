@@ -63,6 +63,9 @@ const Matches = {
       container.innerHTML = `<div class="empty-state"><div class="icon">${iconSvg('search')}</div><h3>Chưa có match nào</h3><p>Hãy nói chuyện với trợ lý: "Tìm người hợp vibe đi".</p></div>`;
     }
 
+    // Refresh notification badge
+    Notifications.fetchUnreadCount();
+
     // Update badge
     const count = matched.reduce((sum, m) => sum + (m.unread_count || 0), 0);
     State.set('matchCount', count);

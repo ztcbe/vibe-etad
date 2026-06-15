@@ -38,6 +38,16 @@ const Assistant = {
       if (s.success) this._sessionId = s.data.id;
     }
 
+    // Store session ID in global state for notifications
+    State.set('assistantSessionId', this._sessionId);
+
+    // Mark both assistant messages AND notifications as read, then clear badge
+    if (this._sessionId) {
+      await api.markAssistantRead(this._sessionId);
+      await api.markNotificationsRead();
+      Notifications._updateBadge(0);
+    }
+
     // Show welcome if no messages
     const scroll = document.getElementById('homeChatScroll');
     if (!scroll.querySelector('.msg-row')) {
@@ -189,26 +199,26 @@ const Assistant = {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Show uploading indicator in chat
-    this._addBubble('user', 'Đang tải ảnh lên...');
-    const scroll = document.getElementById('homeChatScroll');
+    // Show image preview in chat as user bubble
+    const imageUrl = URL.createObjectURL(file);
+    this._addImageBubble('user', imageUrl, file.name);
+
+    // Show typing
+    this._loading = true;
+    const typingEl = this._addTyping();
 
     const resp = await api.uploadAvatar(file);
-    // Remove loading bubble
-    const bubbles = scroll.querySelectorAll('.bubble.user');
-    const lastBubble = bubbles[bubbles.length - 1];
-    if (lastBubble && lastBubble.textContent.includes('Đang tải ảnh')) {
-      lastBubble.closest('.msg-row')?.remove();
-    }
+    this._loading = false;
+    typingEl?.remove();
 
     if (resp.success) {
-      const imageUrl = resp.data.url;
+      const avatarUrl = resp.data.url;
       // Update all avatar displays immediately
-      _updateAllAvatars(imageUrl);
+      _updateAllAvatars(avatarUrl);
 
       // Update profile state
       const prof = State.get('profile') || {};
-      prof.avatar_url = imageUrl;
+      prof.avatar_url = avatarUrl;
       State.set('profile', prof);
 
       // Show success in chat
@@ -217,7 +227,7 @@ const Assistant = {
       // Also update profile screen if visible
       const profAvatar = document.getElementById('profileAvatar');
       if (profAvatar) {
-        profAvatar.innerHTML = avatarImage(imageUrl);
+        profAvatar.innerHTML = avatarImage(avatarUrl);
       }
     } else {
       this._addBubble('ai', 'Không thể tải ảnh lên: ' + (resp.error?.message || 'Lỗi không xác định'));
@@ -225,6 +235,27 @@ const Assistant = {
 
     // Reset file input
     event.target.value = '';
+
+    // Revoke object URL after a short delay (ensure browser has time to render)
+    setTimeout(() => URL.revokeObjectURL(imageUrl), 5000);
+  },
+
+  _addImageBubble(role, src, alt = 'image') {
+    const scroll = document.getElementById('homeChatScroll');
+    const row = document.createElement('div');
+    row.className = `msg-row${role === 'user' ? ' user' : ''}`;
+    let avatarHtml = iconSvg('user', 'ui-icon avatar-symbol');
+    const profile = State.get('profile');
+    if (role === 'user' && profile?.avatar_url) {
+      avatarHtml = avatarImage(profile.avatar_url);
+    }
+    row.innerHTML = `
+      <div class="avatar avatar-sm avatar-placeholder ${role === 'user' ? 'user-av' : 'ai'}">${role === 'user' ? avatarHtml : iconSvg('spark', 'ui-icon avatar-symbol')}</div>
+      <div class="bubble ${role}"><img src="${src}" alt="${escapeHtml(alt)}" style="max-width:240px;max-height:320px;border-radius:12px;cursor:pointer" onclick="window.open(this.src)"></div>
+    `;
+    scroll.appendChild(row);
+    scroll.scrollTop = scroll.scrollHeight;
+    return row;
   },
 
   quickFind() {

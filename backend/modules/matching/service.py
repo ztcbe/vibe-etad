@@ -13,6 +13,7 @@ from db.models.matching import Like, Match, Recommendation
 from db.models.chat import ChatMessage
 from db.models.moderation import Block
 from modules.matching.scoring import compute_score, score_tier_for
+from common.events import event_bus, Event
 from modules.profiles import service as profile_service
 from common.errors import NotFoundError, ValidationError, ConflictError
 from common.enums import (
@@ -204,6 +205,19 @@ async def like_candidate(db: AsyncSession, user_id: uuid.UUID, candidate_user_id
 
     await db.commit()
 
+    # Emit events for notification system
+    if is_mutual:
+        event_bus.emit(Event("match_created", {
+            "match_id": str(match_record.id),
+            "user_a_id": str(user_id),
+            "user_b_id": str(candidate_user_id),
+        }))
+    else:
+        event_bus.emit(Event("like_received", {
+            "from_user_id": str(user_id),
+            "to_user_id": str(candidate_user_id),
+        }))
+
     result = {
         "match_id": match_record.id if match_record else None,
         "is_mutual": is_mutual,
@@ -385,6 +399,13 @@ async def unmatch(db: AsyncSession, user_id: uuid.UUID, match_id: uuid.UUID) -> 
     match.status = MatchStatus.UNMATCHED
     match.updated_at = datetime.now(timezone.utc)
     await db.commit()
+
+    event_bus.emit(Event("match_unavailable", {
+        "match_id": str(match_id),
+        "user_a_id": str(match.user_a_id),
+        "user_b_id": str(match.user_b_id),
+        "reason": "unmatched",
+    }))
 
 
 # --- Helpers ---

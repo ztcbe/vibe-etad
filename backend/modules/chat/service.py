@@ -12,6 +12,7 @@ from db.models.user import User
 from db.models.profile import UserProfile
 from common.errors import NotFoundError, ForbiddenError, ValidationError
 from common.enums import MessageStatus, MessageType, MatchStatus
+from common.events import event_bus, Event
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,17 @@ async def send_message(
 
     await db.commit()
     await db.refresh(msg)
+
+    # Determine recipient and emit notification event
+    other_user_id = match.user_b_id if match.user_a_id == user_id else match.user_a_id
+    event_bus.emit(Event("message_received", {
+        "match_id": str(match_id),
+        "message_id": str(msg.id),
+        "sender_user_id": str(user_id),
+        "recipient_user_id": str(other_user_id),
+        "content_preview": content[:60],
+    }))
+
     return msg
 
 

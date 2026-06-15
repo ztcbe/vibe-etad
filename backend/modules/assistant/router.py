@@ -57,3 +57,24 @@ async def chat(
 ):
     result = await service.chat(db, user.id, data)
     return standard_response(data=result)
+
+
+@router.post("/sessions/{session_id}/mark-read")
+async def mark_session_read(
+    session_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    """Mark all assistant messages in a session as read."""
+    count = await service.mark_messages_read(db, user.id, session_id)
+    return standard_response(data={"marked": count})
+
+
+@router.get("/unread-count")
+async def unread_assistant_count(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    """Get count of unread assistant messages across all sessions."""
+    count = await service.get_unread_count(db, user.id)
+    return standard_response(data={"unread_count": count})

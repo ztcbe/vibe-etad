@@ -95,7 +95,7 @@
     <div id="app-body">
       <!-- Sidebar -->
       <div id="sidebar">
-        <div class="nav-item active" data-route="home" onclick="Router.go('home')"><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg><span>Trợ lý</span></div>
+        <div class="nav-item active" data-route="home" onclick="Router.go('home')"><svg class="ui-icon" aria-hidden="true"><use href="#i-chat"></use></svg><span>Trợ lý</span> <span class="badge" id="assistantBadge" style="display:none">0</span></div>
         <div class="nav-item" data-route="matches" onclick="Router.go('matches')"><svg class="ui-icon" aria-hidden="true"><use href="#i-heart"></use></svg><span>Matches</span> <span class="badge" id="matchBadge" style="display:none">0</span></div>
         <div class="nav-item" data-route="profile" onclick="Router.go('profile')"><svg class="ui-icon" aria-hidden="true"><use href="#i-user"></use></svg><span>Hồ sơ</span></div>
         <div class="nav-divider"></div>
@@ -217,6 +217,7 @@
 <!-- ════ JS Modules ════ -->
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>
+<script src="js/notifications.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/assistant.js"></script>
 <script src="js/matches.js"></script>

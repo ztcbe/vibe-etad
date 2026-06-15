@@ -165,6 +165,14 @@ const api = {
     }
   },
 
+  // ── Notification shortcuts ──
+  async unreadCount() { return this.get('/notifications/unread-count'); },
+  async markNotificationsRead() { return this.post('/notifications/mark-read', {}); },
+  async markAssistantRead(sessionId) {
+    if (!sessionId) return { success: false };
+    return this.post(`/assistant/sessions/${sessionId}/mark-read`);
+  },
+
   // ── Assistant shortcuts ──
   async createSession(title) { return this.post('/assistant/sessions', { title }); },
   async listSessions() { return this.get('/assistant/sessions'); },

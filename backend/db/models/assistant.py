@@ -2,7 +2,7 @@ import uuid
 from db.enum_helper import zvibe_enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,6 +31,7 @@ class AssistantMessage(Base):
     role: Mapped[AssistantRole] = mapped_column(zvibe_enum(AssistantRole), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_: Mapped[dict | None] = mapped_column("metadata", type_=JSONB, default=dict)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

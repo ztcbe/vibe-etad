@@ -62,11 +62,9 @@ async def get_current_user_ws(
     """Authenticate WebSocket connection via JWT token in query string."""
     payload = decode_token(token)
     if payload is None:
-        await websocket.close(code=4001, reason="Invalid token")
         raise WebSocketException(code=4001, reason="Invalid token")
     user_id = payload.get("sub")
     if user_id is None:
-        await websocket.close(code=4001, reason="Invalid token")
         raise WebSocketException(code=4001, reason="Invalid token")
     result = await db.execute(
         select(User)
@@ -75,7 +73,6 @@ async def get_current_user_ws(
     )
     user = result.scalar_one_or_none()
     if user is None:
-        await websocket.close(code=4001, reason="User not found")
         raise WebSocketException(code=4001, reason="User not found")
 
     # Update last_active_at (throttled: only if > 60s since last update)

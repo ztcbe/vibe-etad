@@ -2,7 +2,7 @@
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, WebSocket, Depends
+from fastapi import FastAPI, Query, Request, WebSocket, Depends
 from starlette.types import ASGIApp, Scope, Receive, Send
 from starlette.staticfiles import StaticFiles as _StaticFiles
 from starlette.responses import Response as StarletteResponse
@@ -33,7 +33,9 @@ from db.models.user import User
 async def lifespan(app: FastAPI):
     setup_logging()
     from modules.assistant.session import init_session_service, shutdown_session_service
+    from modules.notifications.service import register_event_handlers
     await init_session_service(settings.DATABASE_URL)
+    register_event_handlers()
     yield
     await shutdown_session_service()
 
@@ -63,6 +65,7 @@ from modules.assistant.router import router as assistant_router
 from modules.matching.router import router as matching_router
 from modules.chat.router import router as chat_router
 from modules.admin.router import router as admin_router
+from modules.notifications.router import router as notifications_router
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(profile_router, prefix="/api")
@@ -71,9 +74,11 @@ app.include_router(assistant_router, prefix="/api")
 app.include_router(matching_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+app.include_router(notifications_router, prefix="/api")
 
 # ── WebSocket ──
 from modules.chat.websocket import chat_websocket
+from modules.notifications.websocket import notifications_websocket
 
 
 @app.websocket("/ws/chats/{match_id}")
@@ -84,6 +89,16 @@ async def ws_chat(
     db: AsyncSession = Depends(get_session),
 ):
     await chat_websocket(websocket, match_id, user, db)
+
+
+@app.websocket("/ws/notifications")
+async def ws_notifications(
+    websocket: WebSocket,
+    token: str = Query(...),
+    user: User = Depends(get_current_user_ws),
+    db: AsyncSession = Depends(get_session),
+):
+    await notifications_websocket(websocket, user.id)
 
 
 # ── Health check ──

@@ -97,6 +97,14 @@ class ReportStatus(str, enum.Enum):
     REJECTED = "rejected"
 
 
+class NotificationType(str, enum.Enum):
+    LIKE_RECEIVED = "like_received"
+    MATCH_CREATED = "match_created"
+    MESSAGE_RECEIVED = "message_received"
+    MATCH_UNAVAILABLE = "match_unavailable"
+    SYSTEM = "system"
+
+
 class ActionType(str, enum.Enum):
     CANDIDATE_CARDS = "candidate_cards"
     PROFILE_SUMMARY_CARD = "profile_summary_card"
