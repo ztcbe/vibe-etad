@@ -109,6 +109,15 @@ async def generate_suggested_replies(match_id: str, tone: str = "natural") -> di
         "proactive": "chủ động, tự tin, trực tiếp rủ rê",
         "gentle": "nhẹ nhàng, lịch sự, ấm áp",
         "concise": "ngắn gọn, súc tích, đi thẳng vào vấn đề",
+        "rebel": "bất cần, nổi loạn, không tuân theo quy tắc xã hội, có thể hơi thô lỗ nếu vibe match như vậy",
+        "badboy": "bạo lực, không tôn trọng, có thể gây khó chịu nếu vibe match như vậy",
+        "sarcastic": "châm biếm, mỉa mai, có thể hơi cay độc nếu vibe match như vậy",
+        "flirty": "tán tỉnh, gợi cảm, có chút khiêu khích nếu vibe match như vậy",
+        "empathetic": "đồng cảm, thấu hiểu, chia sẻ cảm xúc của match",
+        "supportive": "ủng hộ, khích lệ, luôn đứng về phía match",
+        "playful": "vui tươi, nghịch ngợm, có chút trẻ con nếu vibe match như vậy",
+        "badgirl": "cá tính, mạnh mẽ, không ngại thể hiện quan điểm, có thể hơi thô lỗ nếu vibe match như vậy",
+        "sassy": "hỗn xược, tự tin, có phần kiêu căng, có thể gây khó chịu nếu vibe match như vậy",
     }
 
     return {

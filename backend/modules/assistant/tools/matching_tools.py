@@ -22,28 +22,49 @@ def _normalize_vn(text: str) -> str:
 
 
 def _fuzzy_match_name(query: str, candidates: list[dict]) -> list[dict]:
-    """Fuzzy match a name against a list of candidate dicts (each has 'display_name').
+    """Fuzzy match a name against a list of candidate dicts (each has 'display_name' and optionally 'username').
 
     Tries in order:
-    1. Exact case-insensitive match
-    2. Normalized (no-accent) match
-    3. Partial normalized match (query is substring)
+    1. Exact case-insensitive match on display_name or username
+    2. Normalized (no-accent) match on display_name or username
+    3. Partial normalized match (query is substring of display_name or username)
 
-    Returns matching candidates (best matches first).
+    Returns matching candidates (best matches first, deduped).
     """
     q = query.strip()
     q_norm = _normalize_vn(q)
 
-    exact = [c for c in candidates if c.get('display_name', '').strip().lower() == q.lower()]
+    def _match_name(c):
+        return c.get('display_name', '').strip().lower()
+
+    def _match_username(c):
+        return c.get('username', '').strip().lower()
+
+    # Exact match
+    exact = [c for c in candidates if _match_name(c) == q.lower() or _match_username(c) == q.lower()]
     if exact:
-        return exact
+        return _dedup_fuzzy(exact)
 
-    norm_matches = [c for c in candidates if _normalize_vn(c.get('display_name', '')) == q_norm]
+    # Normalized match
+    norm_matches = [c for c in candidates if _normalize_vn(c.get('display_name', '')) == q_norm or _normalize_vn(c.get('username', '')) == q_norm]
     if norm_matches:
-        return norm_matches
+        return _dedup_fuzzy(norm_matches)
 
-    partial = [c for c in candidates if q_norm in _normalize_vn(c.get('display_name', ''))]
-    return partial
+    # Partial match
+    partial = [c for c in candidates if q_norm in _normalize_vn(c.get('display_name', '')) or q_norm in _normalize_vn(c.get('username', ''))]
+    return _dedup_fuzzy(partial)
+
+
+def _dedup_fuzzy(candidates: list[dict]) -> list[dict]:
+    """Deduplicate fuzzy match results by user_id."""
+    seen = set()
+    result = []
+    for c in candidates:
+        uid = c.get('user_id')
+        if uid and uid not in seen:
+            seen.add(uid)
+            result.append(c)
+    return result
 
 
 async def search_candidates(limit: int = 5) -> dict:
@@ -139,7 +160,7 @@ async def list_matched_profiles() -> dict:
     uncertain — search through this list to find the right person.
 
     Returns:
-        Dict with 'matched' list of {user_id, display_name, age, city, dating_goal, match_id}.
+        Dict with 'matched' list of {user_id, username, display_name, age, city, dating_goal, match_id}.
     """
     db = current_db.get()
     user_id_str = current_user_id.get()
@@ -179,6 +200,7 @@ async def list_matched_profiles() -> dict:
 
         profiles.append({
             "user_id": str(other_id),
+            "username": user.username if user else None,
             "display_name": profile.display_name,
             "age": age,
             "city": profile.city,
@@ -190,17 +212,20 @@ async def list_matched_profiles() -> dict:
 
 
 async def find_user_by_name(name: str) -> dict:
-    """Search for users by display name (case-insensitive partial match).
+    """Search for users by display name OR username (case-insensitive partial match).
 
     Use this when the user mentions someone by name (e.g. "tôi thích Phúc")
-    and you need to find that person's profile to check relationship status
-    or get their user ID.
+    or username (e.g. "tìm user long2") and you need to find that person's
+    profile to check relationship status or get their user ID.
+
+    If multiple users match, ALL are returned so you can ask the user to
+    clarify which person they meant (use username to disambiguate).
 
     Args:
-        name: Display name or partial name to search for.
+        name: Display name, username, or partial name to search for.
 
     Returns:
-        Dict with 'found' (bool) and 'users' (list of {user_id, display_name, city, age, dating_goal}).
+        Dict with 'found' (bool) and 'users' (list of {user_id, username, display_name, city, age, dating_goal}).
     """
     db = current_db.get()
     user_id_str = current_user_id.get()
@@ -209,35 +234,43 @@ async def find_user_by_name(name: str) -> dict:
 
     current_uid = uuid.UUID(user_id_str)
 
-    # Case-insensitive partial match on display_name
+    # Case-insensitive partial match on display_name OR username
     result = await db.execute(
-        select(UserProfile).where(
-            UserProfile.display_name.ilike(f"%{name}%"),
-            UserProfile.user_id != current_uid,
-        ).limit(5)
-    )
-    profiles = result.scalars().all()
-
-    from db.models.user import User as UserModel
-    users = []
-    for p in profiles:
-        user_result = await db.execute(
-            select(UserModel).where(UserModel.id == p.user_id)
+        select(UserModel, UserProfile)
+        .join(UserProfile, UserProfile.user_id == UserModel.id)
+        .where(
+            UserModel.id != current_uid,
+            or_(
+                UserProfile.display_name.ilike(f"%{name}%"),
+                UserModel.username.ilike(f"%{name}%"),
+            ),
         )
-        user = user_result.scalar_one_or_none()
+        .limit(10)
+    )
+    rows = result.all()
+
+    seen_uids = set()
+    users = []
+    for user, profile in rows:
+        uid_str = str(user.id)
+        if uid_str in seen_uids:
+            continue
+        seen_uids.add(uid_str)
+
         age = None
-        if user and user.date_of_birth:
+        if user.date_of_birth:
             from datetime import date
             today = date.today()
             age = today.year - user.date_of_birth.year - (
                 (today.month, today.day) < (user.date_of_birth.month, user.date_of_birth.day)
             )
         users.append({
-            "user_id": str(p.user_id),
-            "display_name": p.display_name,
-            "city": p.city,
+            "user_id": uid_str,
+            "username": user.username,
+            "display_name": profile.display_name,
+            "city": profile.city,
             "age": age,
-            "dating_goal": p.dating_goal.value if p.dating_goal else None,
+            "dating_goal": profile.dating_goal.value if profile.dating_goal else None,
         })
 
     return {
@@ -339,8 +372,9 @@ async def check_relationship_status(name: str) -> dict:
         name: Display name of the person to check.
 
     Returns:
-        Dict with status details: exists, relation (none/liked_by_me/liked_me/mutual/matched/passed),
-        match_id (if matched), and person info.
+        Dict with status details: exists, relation (none/liked_by_me/liked_me/mutual/matched/passed/ambiguous),
+        match_id (if matched), and person info. If multiple users match the name, returns ambiguous
+        with all matching users so you can ask the user to clarify.
     """
     db = current_db.get()
     user_id_str = current_user_id.get()
@@ -358,7 +392,16 @@ async def check_relationship_status(name: str) -> dict:
             "message": f"Không tìm thấy người dùng nào tên '{name}' trong hệ thống.",
         }
 
-    # Take the first match
+    # If multiple matches, return ambiguous for disambiguation
+    if len(search["users"]) > 1:
+        return {
+            "exists": True,
+            "relation": "ambiguous",
+            "message": f"Có {len(search['users'])} người dùng tên gần giống '{name}'. Hãy hỏi user chọn đúng người (dùng username để phân biệt).",
+            "users": search["users"],
+        }
+
+    # Single match — proceed
     person = search["users"][0]
     person_uid = uuid.UUID(person["user_id"])
 

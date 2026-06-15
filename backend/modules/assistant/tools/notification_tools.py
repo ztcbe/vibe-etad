@@ -90,6 +90,7 @@ async def get_notifications(
 
         notifications["pending_likes"].append({
             "user_id": user_id_str,
+            "username": user.username,
             "display_name": profile.display_name if profile else "ai đó",
             "age": _calc_age(user.date_of_birth) if user.date_of_birth else None,
             "liked_at": like.created_at.isoformat() if like.created_at else None,
@@ -131,9 +132,11 @@ async def get_notifications(
                 .limit(1)
             )
             last_msg_row = last_msg.scalar_one_or_none()
+            other_user = await db.get(User, other_id)
             notifications["unread_messages"].append({
                 "match_id": match_id_str,
                 "from_user_id": str(other_id),
+                "username": other_user.username if other_user else None,
                 "display_name": profile.display_name if profile else "ai đó",
                 "unread_count": unread_count,
                 "last_message_preview": last_msg_row.content[:60] if last_msg_row else "",
@@ -155,9 +158,11 @@ async def get_notifications(
                 select(UserProfile).where(UserProfile.user_id == other_id)
             )
             profile = other_profile.scalar_one_or_none()
+            other_user = await db.get(User, other_id)
             notifications["new_matches"].append({
                 "match_id": match_id_str,
                 "user_id": str(other_id),
+                "username": other_user.username if other_user else None,
                 "display_name": profile.display_name if profile else "ai đó",
                 "matched_at": match.created_at.isoformat(),
             })
