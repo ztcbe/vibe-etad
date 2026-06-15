@@ -69,6 +69,7 @@ const Auth = {
       State.set('refreshToken', resp.data.refresh_token);
       localStorage.setItem('zvibe_token', resp.data.access_token);
       localStorage.setItem('zvibe_refresh', resp.data.refresh_token);
+      toast('Đăng ký thành công! Hãy hoàn thiện hồ sơ để trợ lý tìm người hợp vibe cho bạn.', 'success');
       await Router.loadUser();
     } else {
       errEl.textContent = resp.error?.message || 'Đăng ký thất bại';

@@ -118,17 +118,17 @@ async def update_my_profile(
     if bio is not None:
         update_data["bio"] = bio
     if personality_traits is not None:
-        update_data["personality_traits"] = personality_traits
+        update_data["personality_traits"] = _parse_list_field(personality_traits)
     if hobbies is not None:
-        update_data["hobbies"] = hobbies
+        update_data["hobbies"] = _parse_list_field(hobbies)
     if values is not None:
-        update_data["values"] = values
+        update_data["values"] = _parse_list_field(values)
     if communication_style is not None:
         update_data["communication_style"] = communication_style
     if deal_breakers is not None:
-        update_data["deal_breakers"] = deal_breakers
+        update_data["deal_breakers"] = _parse_list_field(deal_breakers)
     if preferences is not None:
-        update_data["preferences"] = preferences
+        update_data["preferences"] = _parse_dict_field(preferences)
     if public_summary is not None:
         update_data["public_summary"] = public_summary
     if avatar_url is not None:
@@ -137,7 +137,11 @@ async def update_my_profile(
     if not update_data:
         return {"message": "Không có thông tin nào được cập nhật.", "updated_fields": []}
 
-    request = ProfileUpdateRequest(**update_data)
+    try:
+        request = ProfileUpdateRequest(**update_data)
+    except Exception as e:
+        return {"error": f"Dữ liệu cập nhật không hợp lệ: {e}. Hãy thử lại với định dạng khác.", "details": str(e)}
+
     profile = await profile_service.update_my_profile(db, uuid.UUID(user_id_str), request)
 
     # Recalculate completeness after update
@@ -164,3 +168,35 @@ async def update_my_avatar(image_url: str) -> dict:
         Dict with success message and the new avatar URL.
     """
     return await update_my_profile(avatar_url=image_url)
+
+
+import json
+
+
+def _parse_list_field(value):
+    """Parse a value that should be a list. LLM sometimes passes JSON strings."""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    # Fallback: wrap single value in list
+    return [value] if value else []
+
+
+def _parse_dict_field(value):
+    """Parse a value that should be a dict. LLM sometimes passes JSON strings."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {}
