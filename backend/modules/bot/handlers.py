@@ -37,16 +37,6 @@ async def _on_bot_message_received(event: Event) -> None:
             if sender and sender.is_bot:
                 return  # Sender is also a bot, skip
 
-            # Random delay so reply feels natural
-            delay = random.uniform(
-                settings.BOT_REPLY_DELAY_MIN, settings.BOT_REPLY_DELAY_MAX
-            )
-            logger.info(
-                f"Bot {recipient_user_id} waiting {delay:.1f}s before replying "
-                f"in match {match_id}"
-            )
-            await asyncio.sleep(delay)
-
             # Re-check: has the bot already replied to the latest human message?
             last_human = await db.execute(
                 select(ChatMessage)

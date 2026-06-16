@@ -12,6 +12,9 @@ venv/
 .env
 .env.local
 .env.*.local
+# Ignore all *.env (production, staging, etc.) except the tracked example template
+*.env
+!backend/.env.example
 
 # ── Database ──
 *.db
