@@ -144,9 +144,10 @@ async def search_candidates(
 
     await db.commit()
 
-    # Sort by score desc, return top N
+    # Sort by score desc, filter out hard-fail (score=0), return top N
     scored.sort(key=lambda x: x["score"], reverse=True)
-    return scored[:limit]
+    viable = [c for c in scored if c["score"] > 0]
+    return viable[:limit]
 
 
 async def like_candidate(db: AsyncSession, user_id: uuid.UUID, candidate_user_id: uuid.UUID) -> dict:
@@ -360,6 +361,7 @@ async def list_matches(db: AsyncSession, user_id: uuid.UUID) -> dict:
                 "age": _calculate_age(other_user.date_of_birth) if other_user else None,
                 "avatar_url": profile.avatar_url if profile else None,
                 "is_online": is_online,
+                "is_bot": other_user.is_bot if other_user else False,
             },
             "last_message": {
                 "content": last_msg_row.content,

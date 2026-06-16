@@ -6,6 +6,19 @@ from modules.assistant.tools import current_db, current_user_id
 from modules.profiles import service as profile_service
 from modules.profiles.schemas import ProfileUpdateRequest
 
+# Normalize gender to English for consistent storage/comparison
+_GENDER_NORM = {
+    "nam": "male", "trai": "male", "con trai": "male", "đàn ông": "male", "boy": "male",
+    "nữ": "female", "nư": "female", "gái": "female", "con gái": "female",
+    "phụ nữ": "female", "nu": "female", "girl": "female",
+    "cả hai": "both", "hai": "both", "tất cả": "both", "both": "both",
+}
+
+
+def _norm_gender(value: str) -> str:
+    cleaned = value.strip().lower()
+    return _GENDER_NORM.get(cleaned, cleaned)
+
 
 async def get_my_profile() -> dict:
     """Get the current user's full dating profile. Returns all fields."""
@@ -108,9 +121,12 @@ async def update_my_profile(
     if display_name is not None:
         update_data["display_name"] = display_name
     if gender is not None:
-        update_data["gender"] = gender
+        update_data["gender"] = _norm_gender(gender)
     if interested_in is not None:
-        update_data["interested_in"] = interested_in
+        # interested_in can be comma-separated ("nữ,nam" → "female,male")
+        update_data["interested_in"] = ",".join(
+            _norm_gender(g.strip()) for g in str(interested_in).split(",")
+        )
     if city is not None:
         update_data["city"] = city
     if dating_goal is not None:

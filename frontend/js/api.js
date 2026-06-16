@@ -178,6 +178,7 @@ const api = {
   async listSessions() { return this.get('/assistant/sessions'); },
   async assistantChat(sessionId, message, context = {}) { return this.post('/assistant/chat', { session_id: sessionId, message, context }); },
   async sessionMessages(sessionId) { return this.get(`/assistant/sessions/${sessionId}/messages`); },
+  async saveAssistantMessage(sessionId, message, metadata = null, role = 'user') { return this.post(`/assistant/sessions/${sessionId}/messages`, { message, metadata, role }); },
 
   // ── Admin shortcuts ──
   async adminUsers(page = 1) { return this.get('/admin/users', { page }); },

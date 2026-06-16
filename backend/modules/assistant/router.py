@@ -9,11 +9,13 @@ from app.dependencies import get_current_user
 from modules.assistant.schemas import (
     CreateSessionRequest,
     ChatRequest,
+    SaveMessageRequest,
     SessionResponse,
     MessageResponse,
     ChatResponse,
 )
 from modules.assistant import service
+from common.enums import AssistantRole
 from common.errors import standard_response
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
@@ -47,6 +49,27 @@ async def get_messages(
 ):
     messages = await service.get_messages(db, session_id, user.id)
     return standard_response(data=[MessageResponse.model_validate(m) for m in messages])
+
+
+@router.post("/sessions/{session_id}/messages")
+async def save_message(
+    session_id: uuid.UUID,
+    data: SaveMessageRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    """Save a user message to the session without triggering AI response.
+
+    Use this for persisting non-text messages (e.g., image uploads) in chat history.
+    """
+    role = AssistantRole(data.role) if data.role in ("user", "assistant") else AssistantRole.USER
+    msg = await service.save_message(
+        db, user.id, session_id,
+        content=data.message,
+        metadata=data.metadata,
+        role=role,
+    )
+    return standard_response(data=MessageResponse.model_validate(msg))
 
 
 @router.post("/chat")

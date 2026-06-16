@@ -55,9 +55,9 @@
       <!-- Login form -->
       <div id="loginForm">
         <label class="field-label">Username</label>
-        <input class="input-field" id="loginUser" type="text" placeholder="username">
+        <input class="input-field" id="loginUser" type="text" placeholder="username" onkeydown="if(event.key==='Enter')Auth.login()">
         <label class="field-label">Mật khẩu</label>
-        <input class="input-field" id="loginPass" type="password" placeholder="••••••••">
+        <input class="input-field" id="loginPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')Auth.login()">
         <div class="field-error" id="authErr"></div>
         <button class="btn btn-primary" onclick="Auth.login()">Đăng nhập</button>
         <div class="switch-link" onclick="Auth.toggleForm()">Chưa có tài khoản? <b>Đăng ký</b></div>
@@ -66,13 +66,13 @@
       <!-- Register form -->
       <div id="registerForm" style="display:none">
         <label class="field-label">Username</label>
-        <input class="input-field" id="regUser" type="text" placeholder="username">
-        <label class="field-label">Mật khẩu (tối thiểu 8 ký tự)</label>
-        <input class="input-field" id="regPass" type="password" placeholder="••••••••">
+        <input class="input-field" id="regUser" type="text" placeholder="username" onkeydown="if(event.key==='Enter')Auth.register()">
+        <label class="field-label">Mật khẩu</label>
+        <input class="input-field" id="regPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')Auth.register()">
         <label class="field-label">Nhập lại mật khẩu</label>
-        <input class="input-field" id="regPass2" type="password" placeholder="••••••••">
+        <input class="input-field" id="regPass2" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')Auth.register()">
         <label class="field-label">Ngày sinh</label>
-        <input class="input-field" id="regDob" type="date" value="2000-01-01">
+        <input class="input-field" id="regDob" type="text" placeholder="dd/mm/yyyy (VD: 15/06/2000)" inputmode="numeric" pattern="\d{2}/\d{2}/\d{4}" title="Nhập ngày sinh dạng dd/mm/yyyy">
         <div class="field-error" id="regErr"></div>
         <button class="btn btn-primary" onclick="Auth.register()">Đăng ký</button>
         <div class="switch-link" onclick="Auth.toggleForm()">Đã có tài khoản? <b>Đăng nhập</b></div>

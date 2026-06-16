@@ -49,16 +49,35 @@ const Auth = {
     const errEl = document.getElementById('regErr');
 
     if (!username || !pass || !dob) { errEl.textContent = 'Vui lòng điền đầy đủ thông tin'; return; }
+
+    // Parse dd/mm/yyyy → yyyy-mm-dd for API
+    const dobParts = dob.split('/');
+    if (dobParts.length !== 3 || !/^\d{2}\/\d{2}\/\d{4}$/.test(dob)) {
+      errEl.textContent = 'Ngày sinh phải đúng định dạng dd/mm/yyyy (VD: 15/06/2000)'; return;
+    }
+    const day = parseInt(dobParts[0], 10);
+    const month = parseInt(dobParts[1], 10);
+    const year = parseInt(dobParts[2], 10);
+    // Validate ranges
+    if (year < 1900 || year > 2020 || month < 1 || month > 12 || day < 1 || day > 31) {
+      errEl.textContent = 'Ngày sinh không hợp lệ'; return;
+    }
+    // Validate actual calendar date
+    const testDate = new Date(year, month - 1, day);
+    if (testDate.getFullYear() !== year || testDate.getMonth() !== month - 1 || testDate.getDate() !== day) {
+      errEl.textContent = 'Ngày sinh không tồn tại'; return;
+    }
+    const dobFormatted = `${dobParts[2]}-${dobParts[1].padStart(2, '0')}-${dobParts[0].padStart(2, '0')}`;
     if (username.length < 3) { errEl.textContent = 'Username tối thiểu 3 ký tự'; return; }
     if (pass !== pass2) { errEl.textContent = 'Mật khẩu không khớp'; return; }
-    if (pass.length < 8) { errEl.textContent = 'Mật khẩu tối thiểu 8 ký tự'; return; }
+
 
     errEl.textContent = '';
     const btn = document.querySelector('#registerForm .btn');
     btn.innerHTML = '<span class="spinner"></span> Đang tạo tài khoản...';
     btn.disabled = true;
 
-    const resp = await api.register(username, pass, pass2, dob);
+    const resp = await api.register(username, pass, pass2, dobFormatted);
     btn.innerHTML = 'Đăng ký';
     btn.disabled = false;
 

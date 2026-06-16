@@ -16,6 +16,13 @@ class ChatRequest(BaseModel):
     context: dict | None = None
 
 
+class SaveMessageRequest(BaseModel):
+    """Save a message to the session without triggering AI."""
+    message: str
+    metadata: dict | None = None
+    role: str = "user"  # "user" or "assistant"
+
+
 class SessionResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
@@ -33,7 +40,7 @@ class MessageResponse(BaseModel):
     session_id: uuid.UUID
     role: str
     content: str
-    metadata: dict | None = Field(default=None, validation_alias="metadata_")
+    metadata: dict | None = Field(default=None, validation_alias="metadata_", serialization_alias="metadata")
     is_read: bool = True
     created_at: datetime
 

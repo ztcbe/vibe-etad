@@ -6,6 +6,19 @@ const Assistant = {
   _sessionId: null,
   _loading: false,
 
+  _refreshContextPanel(profile) {
+    document.getElementById('ctxVibe').textContent = profile.public_summary || profile.bio || 'Hoàn thiện hồ sơ để hiển thị vibe của bạn';
+    const tags = document.getElementById('ctxTags');
+    const hobbies = profile.hobbies;
+    if (hobbies && Array.isArray(hobbies)) {
+      tags.innerHTML = hobbies.slice(0, 5).map(h => `<span class="tag">${h}</span>`).join('');
+    } else if (hobbies && typeof hobbies === 'object') {
+      tags.innerHTML = Object.keys(hobbies).slice(0, 5).map(h => `<span class="tag">${h}</span>`).join('');
+    } else {
+      tags.innerHTML = '';
+    }
+  },
+
   async init() {
     // Clear previous state — prevents old chat from showing after logout/register
     this._sessionId = null;
@@ -17,14 +30,7 @@ const Assistant = {
       State.set('profile', prof.data);
       State.set('completeness', prof.data.completeness_score || 0);
       Router.updateTopbar();
-      document.getElementById('ctxVibe').textContent = prof.data.public_summary || prof.data.bio || 'Hoàn thiện hồ sơ để hiển thị vibe của bạn';
-      const tags = document.getElementById('ctxTags');
-      const hobbies = prof.data.hobbies;
-      if (hobbies && Array.isArray(hobbies)) {
-        tags.innerHTML = hobbies.slice(0, 5).map(h => `<span class="tag">${h}</span>`).join('');
-      } else if (hobbies && typeof hobbies === 'object') {
-        tags.innerHTML = Object.keys(hobbies).slice(0, 5).map(h => `<span class="tag">${h}</span>`).join('');
-      }
+      this._refreshContextPanel(prof.data);
     }
 
     // Get or create assistant session
@@ -61,7 +67,12 @@ const Assistant = {
       const scroll = document.getElementById('homeChatScroll');
       scroll.innerHTML = '';
       resp.data.forEach(m => {
-        this._addBubble(m.role === 'user' ? 'user' : 'ai', m.content);
+        const meta = m.metadata || m.metadata_;
+        if (meta?.message_type === 'image') {
+          this._addImageBubble('user', m.content, 'Ảnh đại diện');
+        } else {
+          this._addBubble(m.role === 'user' ? 'user' : 'ai', m.content);
+        }
       });
       scroll.scrollTop = scroll.scrollHeight;
     }
@@ -100,6 +111,7 @@ const Assistant = {
                 State.set('completeness', p.data.completeness_score || 0);
                 Router.updateTopbar();
                 _updateAllAvatars(p.data.avatar_url);
+                Assistant._refreshContextPanel(p.data);
               }
             });
           }
@@ -220,6 +232,17 @@ const Assistant = {
       const prof = State.get('profile') || {};
       prof.avatar_url = avatarUrl;
       State.set('profile', prof);
+
+      // Persist both the image message and AI response in session history
+      if (this._sessionId) {
+        await api.saveAssistantMessage(this._sessionId, avatarUrl, { message_type: 'image' }, 'user');
+        await api.saveAssistantMessage(
+          this._sessionId,
+          'Ảnh đại diện của bạn đã được cập nhật. Bạn có thể xem ở phần Hồ sơ.',
+          null,
+          'assistant'
+        );
+      }
 
       // Show success in chat
       this._addBubble('ai', 'Ảnh đại diện của bạn đã được cập nhật. Bạn có thể xem ở phần Hồ sơ.');

@@ -16,6 +16,20 @@ from typing import Any
 
 from common.enums import DatingGoal, ScoreTier
 
+# Normalize gender values (LLM may use Vietnamese, seed data uses English)
+_GENDER_NORM: dict[str, str] = {
+    "nam": "male", "trai": "male", "con trai": "male", "đàn ông": "male", "boy": "male",
+    "nữ": "female", "nư": "female", "gái": "female", "con gái": "female",
+    "phụ nữ": "female", "nu": "female", "girl": "female",
+    "cả hai": "both", "hai": "both", "tất cả": "both", "both": "both",
+}
+
+
+def _norm_gender(value: str) -> str:
+    """Normalize gender to English ('male', 'female', 'both')."""
+    cleaned = value.strip().lower()
+    return _GENDER_NORM.get(cleaned, cleaned)
+
 # Dating goal compatibility matrix (row=user, col=candidate): 1.0 = perfect match
 _GOAL_COMPAT: dict[str, dict[str, float]] = {
     "serious":       {"serious": 1.0, "friends_first": 0.6, "casual": 0.2, "not_sure": 0.5},
@@ -105,19 +119,20 @@ def score_tier_for(score: int) -> str:
 def _hard_filters(user: dict, candidate: dict) -> tuple[bool, str]:
     """Check hard pass/fail conditions."""
     # Gender/interested_in compatibility — split on comma for multi-gender support
-    user_gender = (user.get("gender") or "").lower().strip()
+    # Normalize gender values to handle both Vietnamese and English inputs
+    user_gender = _norm_gender((user.get("gender") or "").lower().strip())
     user_interested = (user.get("interested_in") or "").lower().strip()
-    cand_gender = (candidate.get("gender") or "").lower().strip()
+    cand_gender = _norm_gender((candidate.get("gender") or "").lower().strip())
     cand_interested = (candidate.get("interested_in") or "").lower().strip()
 
     # User wants cand_gender: cand_gender must be IN user's interested_in list
     if user_interested and cand_gender:
-        user_interested_set = {g.strip() for g in user_interested.split(",")}
+        user_interested_set = {_norm_gender(g.strip()) for g in user_interested.split(",")}
         if cand_gender not in user_interested_set:
             return False, "gender_mismatch"
     # Candidate wants user_gender: user_gender must be IN candidate's interested_in list
     if cand_interested and user_gender:
-        cand_interested_set = {g.strip() for g in cand_interested.split(",")}
+        cand_interested_set = {_norm_gender(g.strip()) for g in cand_interested.split(",")}
         if user_gender not in cand_interested_set:
             return False, "gender_mismatch"
 

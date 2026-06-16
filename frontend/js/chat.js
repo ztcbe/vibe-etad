@@ -5,11 +5,13 @@
 const Chat = {
   _matchId: null,
   _user: null,
+  _isBot: false,
   _ws: null,
   _wsGen: 0,           // generation counter — detects stale WS connections
   _reconnectTimer: null,
   _sending: false,      // guard against double-send
   _renderedIds: new Set(),  // dedup rendered message IDs
+  _typingEl: null,      // bot typing indicator element
 
   async init(matchId, user) {
     // Clean up previous chat state before initializing new one
@@ -22,6 +24,7 @@ const Chat = {
 
     document.getElementById('chat11Name').textContent = `${user.display_name || '...'}, ${user.age || ''}`;
     document.getElementById('chat11Avatar').textContent = user.display_name?.[0] || '?';
+    this._isBot = user.is_bot || false;
     const isOnline = user.is_online !== undefined ? user.is_online : true;
     const statusEl = document.getElementById('chat11Status');
     statusEl.textContent = isOnline ? 'đang hoạt động' : 'không hoạt động';
@@ -68,6 +71,7 @@ const Chat = {
       this._ws.onmessage = (evt) => {
         const data = JSON.parse(evt.data);
         if (data.event === 'message_created' && data.data.sender_user_id !== State.get('user')?.id) {
+          this._removeTyping();
           this._addMessage(data.data);
           // Auto mark as read since chat is open (use current WS, not stale ref)
           const currentWs = this._ws;
@@ -125,6 +129,28 @@ const Chat = {
     scroll.scrollTop = scroll.scrollHeight;
   },
 
+  _addTyping() {
+    if (this._typingEl) return;
+    const scroll = document.getElementById('chat11Scroll');
+    const row = document.createElement('div');
+    row.className = 'msg-row';
+    row.id = 'chat11Typing';
+    row.innerHTML = `
+      <div class="avatar avatar-sm avatar-placeholder">${this._user?.display_name?.[0] || '?'}</div>
+      <div class="bubble ai"><div class="typing-dots"><span></span><span></span><span></span></div></div>
+    `;
+    scroll.appendChild(row);
+    scroll.scrollTop = scroll.scrollHeight;
+    this._typingEl = row;
+  },
+
+  _removeTyping() {
+    if (this._typingEl) {
+      this._typingEl.remove();
+      this._typingEl = null;
+    }
+  },
+
   async send() {
     // Guard against rapid double-sends
     if (this._sending) return;
@@ -140,6 +166,8 @@ const Chat = {
         this._ws.send(JSON.stringify({ action: 'send_message', content: text, message_type: 'text' }));
         // Optimistic render
         this._addMessage({ sender_user_id: State.get('user')?.id, content: text });
+        // Show typing for bot matches
+        if (this._isBot) this._addTyping();
       } else {
         // REST fallback
         const resp = await api.sendMessage(this._matchId, text);

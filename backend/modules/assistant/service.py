@@ -66,6 +66,30 @@ async def get_messages(db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UU
     return list(result.scalars().all())
 
 
+async def save_message(
+    db: AsyncSession, user_id: uuid.UUID, session_id: uuid.UUID,
+    content: str, metadata: dict | None = None,
+    role: AssistantRole = AssistantRole.USER,
+) -> AssistantMessage:
+    """Save a message to the session without triggering AI.
+
+    Used for persisting non-text messages (e.g., image uploads) and their
+    AI responses in chat history.
+    """
+    session = await get_session(db, session_id, user_id)
+    msg = AssistantMessage(
+        session_id=session.id,
+        user_id=user_id,
+        role=role,
+        content=content,
+        metadata_=metadata or {},
+    )
+    db.add(msg)
+    session.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return msg
+
+
 async def chat(db: AsyncSession, user_id: uuid.UUID, data: ChatRequest) -> ChatResponse:
     """Process a chat message through the AI assistant.
 
