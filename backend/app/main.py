@@ -34,8 +34,12 @@ async def lifespan(app: FastAPI):
     setup_logging()
     from modules.assistant.session import init_session_service, shutdown_session_service
     from modules.notifications.service import register_event_handlers
+    from modules.bot.handlers import register_bot_handlers
+    from modules.chat.websocket import register_ws_event_handlers
     await init_session_service(settings.DATABASE_URL)
     register_event_handlers()
+    register_bot_handlers()
+    register_ws_event_handlers()
     yield
     await shutdown_session_service()
 

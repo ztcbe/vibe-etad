@@ -33,6 +33,39 @@ async def search_candidates(
     # Get blocked/banned user IDs to exclude
     blocked_ids = await _get_blocked_user_ids(db, user_id)
 
+    # Collect already-interacted user IDs to exclude
+    exclude_ids = set(blocked_ids)
+
+    # Exclude already matched users
+    matched_result = await db.execute(
+        select(Match).where(
+            Match.status == MatchStatus.ACTIVE,
+            or_(Match.user_a_id == user_id, Match.user_b_id == user_id),
+        )
+    )
+    for m in matched_result.scalars().all():
+        exclude_ids.add(m.user_b_id if m.user_a_id == user_id else m.user_a_id)
+
+    # Exclude already liked users
+    liked_result = await db.execute(
+        select(Like).where(
+            Like.from_user_id == user_id,
+            Like.status == LikeStatus.ACTIVE,
+        )
+    )
+    for lk in liked_result.scalars().all():
+        exclude_ids.add(lk.to_user_id)
+
+    # Exclude already passed users
+    passed_result = await db.execute(
+        select(Like).where(
+            Like.from_user_id == user_id,
+            Like.status == LikeStatus.CANCELLED,
+        )
+    )
+    for ps in passed_result.scalars().all():
+        exclude_ids.add(ps.to_user_id)
+
     # Query active candidates
     stmt = (
         select(User, UserProfile)
@@ -41,7 +74,7 @@ async def search_candidates(
             User.id != user_id,
             User.status == UserStatus.ACTIVE,
             UserProfile.visibility_status == VisibilityStatus.ACTIVE,
-            User.id.notin_(blocked_ids),
+            User.id.notin_(exclude_ids),
         )
         .limit(limit * 5)  # Fetch more for scoring
     )
@@ -315,9 +348,11 @@ async def list_matches(db: AsyncSession, user_id: uuid.UUID) -> dict:
         )
         unread_count = unread.scalar() or 0
 
-        # Compute online status (online if active in last 5 minutes)
+        # Compute online status (bots always online; humans: active in last 5 min)
         is_online = False
-        if other_user and other_user.last_active_at:
+        if other_user and other_user.is_bot:
+            is_online = True
+        elif other_user and other_user.last_active_at:
             is_online = (datetime.now(timezone.utc) - other_user.last_active_at).total_seconds() < 300
 
         matched_items.append({

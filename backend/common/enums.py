@@ -112,3 +112,8 @@ class ActionType(str, enum.Enum):
     MATCH_CELEBRATION = "match_celebration"
     SYSTEM_NOTICE = "system_notice"
     QUICK_ACTIONS = "quick_actions"
+
+
+class AccountSource(str, enum.Enum):
+    HUMAN = "human"
+    SEED = "seed"

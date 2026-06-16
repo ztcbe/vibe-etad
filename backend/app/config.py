@@ -41,6 +41,16 @@ class Settings(BaseSettings):
     COACH_TEMPERATURE: float = 0.9
     COACH_MAX_OUTPUT_TOKENS: int = 1000
 
+    # Bot agent — auto-reply for demo bot users
+    BOT_LLM_MODEL: str | None = None
+    BOT_LLM_API_KEY: str | None = None
+    BOT_LLM_BASE_URL: str | None = None
+    BOT_LLM_MAX_TOKENS: int | None = None
+    BOT_TEMPERATURE: float = 0.9
+    BOT_MAX_OUTPUT_TOKENS: int = 250
+    BOT_REPLY_DELAY_MIN: float = 2.0
+    BOT_REPLY_DELAY_MAX: float = 8.0
+
     # Media
     MEDIA_UPLOAD_DIR: str = "./uploads"
 
@@ -80,6 +90,14 @@ class Settings(BaseSettings):
             "api_key": self.COACH_LLM_API_KEY or self.LLM_API_KEY,
             "api_base": self.COACH_LLM_BASE_URL or self.LLM_BASE_URL,
             "max_tokens": self.COACH_LLM_MAX_TOKENS or self.LLM_MAX_TOKENS,
+        }
+
+    def bot_llm(self) -> dict:
+        return {
+            "model": self.BOT_LLM_MODEL or self.LLM_MODEL,
+            "api_key": self.BOT_LLM_API_KEY or self.LLM_API_KEY,
+            "api_base": self.BOT_LLM_BASE_URL or self.LLM_BASE_URL,
+            "max_tokens": self.BOT_LLM_MAX_TOKENS or self.LLM_MAX_TOKENS,
         }
 
 

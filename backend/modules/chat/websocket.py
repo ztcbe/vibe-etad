@@ -9,6 +9,7 @@ Events (v0.2 §4):
 import json
 import logging
 import uuid
+from datetime import datetime, timezone
 from collections.abc import AsyncGenerator
 
 from fastapi import WebSocket, WebSocketDisconnect, Depends
@@ -22,6 +23,7 @@ from db.models.chat import ChatMessage
 from db.session import get_session
 from modules.chat import service
 from common.enums import MatchStatus
+from common.events import Event, event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -168,3 +170,53 @@ async def _send_error(websocket: WebSocket, code: str, message: str):
         })
     except Exception:
         pass
+
+
+# ── Public helpers for external callers (bot handler, etc.) ──────────
+
+
+async def broadcast_to_match(match_id: uuid.UUID, sender_user_id: uuid.UUID, payload: dict):
+    """Broadcast a JSON payload to all connected users in a match except sender.
+
+    Public wrapper around _broadcast_to_others for use by bot handlers
+    and other modules that need to push events to chat WebSocket clients.
+    """
+    await _broadcast_to_others(match_id, sender_user_id, payload)
+
+
+# ── Event-driven message broadcast (for non-WebSocket message paths) ──
+
+
+async def _on_message_received_for_ws(event: Event):
+    """Broadcast message_created to chat WebSocket clients.
+
+    Handles messages sent via any path (REST, bot handler) — not just
+    those sent through the WebSocket _handle_send_message flow.
+    """
+    payload = event.payload
+    match_id = uuid.UUID(payload["match_id"])
+    sender_user_id = uuid.UUID(payload["sender_user_id"])
+    message_id = uuid.UUID(payload["message_id"])
+
+    msg_payload = {
+        "id": str(message_id),
+        "match_id": str(match_id),
+        "sender_user_id": str(sender_user_id),
+        "content": payload.get("content", ""),
+        "message_type": payload.get("message_type", "text"),
+        "status": "sent",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await _broadcast_to_others(match_id, sender_user_id, {
+        "event": "message_created",
+        "data": msg_payload,
+    })
+
+
+def register_ws_event_handlers():
+    """Register WebSocket event handlers on the global event bus.
+
+    Called during app startup (lifespan).
+    """
+    event_bus.on("message_received", _on_message_received_for_ws)
+    logger.info("WebSocket event handlers registered")

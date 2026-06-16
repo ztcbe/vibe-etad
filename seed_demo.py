@@ -315,6 +315,22 @@ async def seed():
 
         print(f"  ✅ {len(tokens)} users created")
 
+        # ── Mark demo users as bots (direct DB update) ──
+        print("Marking demo users as bots and seed accounts...")
+        from db.session import async_session
+        from sqlalchemy import update as sql_update
+        from sqlalchemy.dialects.postgresql import insert
+        async with async_session() as db:
+            from db.models.user import User
+            demo_usernames = [u[0] for u in USERS]
+            await db.execute(
+                sql_update(User)
+                .where(User.username.in_(demo_usernames))
+                .values(is_bot=True, account_source="seed")
+            )
+            await db.commit()
+        print(f"  ✅ {len(USERS)} demo users marked as bots (account_source=seed)")
+
         # ── Create mutual matches ──
         print("Creating mutual matches...")
         match_ids = []
@@ -370,6 +386,7 @@ async def seed():
         print(f"   {len(PENDING_LIKES)} pending likes attempted")
         print()
         print("Demo accounts (password: demo123456):")
+        print(f"   🤖 {len(USERS)} bot accounts (auto-reply + auto-match)")
         print(f"   🌿 linh    — Linh (primary demo user)")
         print(f"   💞 khang   — Khang (matched with Linh)")
         print(f"   👤 admin   — Admin (set role=admin via DB manually)")

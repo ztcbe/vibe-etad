@@ -10,8 +10,12 @@ from db.models.matching import Like, Match
 from db.models.profile import UserProfile
 from db.models.user import User as UserModel
 from common.enums import LikeStatus, MatchStatus
-from modules.assistant.tools import current_db, current_user_id
+from modules.assistant.tools import current_db, current_user_id, current_session_id
 from modules.matching import service as matching_service
+
+# Session-scoped cache for recently suggested candidates
+# Key: session_id, Value: last search_candidates results
+_session_suggestions: dict[str, list[dict]] = {}
 
 
 def _normalize_vn(text: str) -> str:
@@ -22,12 +26,12 @@ def _normalize_vn(text: str) -> str:
 
 
 def _fuzzy_match_name(query: str, candidates: list[dict]) -> list[dict]:
-    """Fuzzy match a name against a list of candidate dicts (each has 'display_name' and optionally 'username').
+    """Fuzzy match a name against a list of candidate dicts (each has 'display_name').
 
     Tries in order:
-    1. Exact case-insensitive match on display_name or username
-    2. Normalized (no-accent) match on display_name or username
-    3. Partial normalized match (query is substring of display_name or username)
+    1. Exact case-insensitive match on display_name
+    2. Normalized (no-accent) match on display_name
+    3. Partial normalized match (query is substring of display_name)
 
     Returns matching candidates (best matches first, deduped).
     """
@@ -37,21 +41,18 @@ def _fuzzy_match_name(query: str, candidates: list[dict]) -> list[dict]:
     def _match_name(c):
         return c.get('display_name', '').strip().lower()
 
-    def _match_username(c):
-        return c.get('username', '').strip().lower()
-
     # Exact match
-    exact = [c for c in candidates if _match_name(c) == q.lower() or _match_username(c) == q.lower()]
+    exact = [c for c in candidates if _match_name(c) == q.lower()]
     if exact:
         return _dedup_fuzzy(exact)
 
     # Normalized match
-    norm_matches = [c for c in candidates if _normalize_vn(c.get('display_name', '')) == q_norm or _normalize_vn(c.get('username', '')) == q_norm]
+    norm_matches = [c for c in candidates if _normalize_vn(c.get('display_name', '')) == q_norm]
     if norm_matches:
         return _dedup_fuzzy(norm_matches)
 
     # Partial match
-    partial = [c for c in candidates if q_norm in _normalize_vn(c.get('display_name', '')) or q_norm in _normalize_vn(c.get('username', ''))]
+    partial = [c for c in candidates if q_norm in _normalize_vn(c.get('display_name', ''))]
     return _dedup_fuzzy(partial)
 
 
@@ -82,10 +83,34 @@ async def search_candidates(limit: int = 5) -> dict:
         return {"error": "No session context available"}
 
     cards = await matching_service.search_candidates(db, uuid.UUID(user_id_str), limit)
+
+    # Store in session cache so get_recent_suggestions() can retrieve them
+    sid = current_session_id.get()
+    if sid and cards:
+        _session_suggestions[sid] = cards
+
     return {
         "total": len(cards),
         "candidates": cards,
     }
+
+
+async def get_recent_suggestions() -> dict:
+    """Get the most recent candidate suggestions from this session.
+
+    Use this FIRST when the user mentions someone by name after you just
+    suggested candidates via search_candidates. If the person is in this
+    list, use their candidate_user_id directly — do NOT call
+    find_user_by_name or check_relationship_status.
+
+    Returns:
+        Dict with 'candidates' list and 'total' count. Each candidate has
+        candidate_user_id, display_name, age, city, dating_goal, score.
+        Empty list if no suggestions have been made in this session.
+    """
+    sid = current_session_id.get()
+    suggestions = _session_suggestions.get(sid, []) if sid else []
+    return {"candidates": suggestions, "total": len(suggestions)}
 
 
 async def like_candidate(candidate_user_id: str) -> dict:
@@ -112,6 +137,32 @@ async def like_candidate(candidate_user_id: str) -> dict:
             "matched_user": result["user"],
             "is_mutual": True,
         }
+
+    # If not mutual, check if candidate is a bot (auto-likes back instantly)
+    candidate_user = await db.get(UserModel, uuid.UUID(candidate_user_id))
+    if candidate_user and candidate_user.is_bot:
+        # Bot auto-like handler runs asynchronously — brief wait then re-check
+        import asyncio
+        await asyncio.sleep(0.5)
+        current_uid = uuid.UUID(user_id_str)
+        match_check = await db.execute(
+            select(Match).where(
+                Match.status == MatchStatus.ACTIVE,
+                or_(
+                    (Match.user_a_id == current_uid) & (Match.user_b_id == candidate_user.id),
+                    (Match.user_a_id == candidate_user.id) & (Match.user_b_id == current_uid),
+                ),
+            )
+        )
+        m = match_check.scalar_one_or_none()
+        if m:
+            return {
+                "message": "🎉 Chúc mừng! Cả hai đã thích nhau. Bạn có thể bắt đầu chat ngay!",
+                "match_id": str(m.id),
+                "matched_user": result["user"],
+                "is_mutual": True,
+            }
+
     return {
         "message": "Đã gửi lời thích! Khi người ấy thích lại, hai bạn sẽ được match.",
         "is_mutual": False,
@@ -160,7 +211,7 @@ async def list_matched_profiles() -> dict:
     uncertain — search through this list to find the right person.
 
     Returns:
-        Dict with 'matched' list of {user_id, username, display_name, age, city, dating_goal, match_id}.
+        Dict with 'matched' list of {user_id, display_name, age, city, dating_goal, match_id}.
     """
     db = current_db.get()
     user_id_str = current_user_id.get()
@@ -200,7 +251,6 @@ async def list_matched_profiles() -> dict:
 
         profiles.append({
             "user_id": str(other_id),
-            "username": user.username if user else None,
             "display_name": profile.display_name,
             "age": age,
             "city": profile.city,
@@ -212,20 +262,24 @@ async def list_matched_profiles() -> dict:
 
 
 async def find_user_by_name(name: str) -> dict:
-    """Search for users by display name OR username (case-insensitive partial match).
+    """Search for users by display name (case-insensitive partial match).
 
     Use this when the user mentions someone by name (e.g. "tôi thích Phúc")
-    or username (e.g. "tìm user long2") and you need to find that person's
-    profile to check relationship status or get their user ID.
+    and you need to find that person's profile to check relationship status
+    or get their user ID.
+
+    ONLY use this for names NOT in recent search_candidates results.
+    For names from recent suggestions, use the candidate_user_id directly.
 
     If multiple users match, ALL are returned so you can ask the user to
-    clarify which person they meant (use username to disambiguate).
+    clarify which person they meant (use display_name, city, and age to
+    disambiguate — NEVER show username).
 
     Args:
-        name: Display name, username, or partial name to search for.
+        name: Display name or partial name to search for.
 
     Returns:
-        Dict with 'found' (bool) and 'users' (list of {user_id, username, display_name, city, age, dating_goal}).
+        Dict with 'found' (bool) and 'users' (list of {user_id, display_name, city, age, dating_goal}).
     """
     db = current_db.get()
     user_id_str = current_user_id.get()
@@ -234,16 +288,33 @@ async def find_user_by_name(name: str) -> dict:
 
     current_uid = uuid.UUID(user_id_str)
 
-    # Case-insensitive partial match on display_name OR username
+    # Collect IDs to exclude: already matched, liked, or passed
+    matched_result = await db.execute(
+        select(Match).where(
+            Match.status == MatchStatus.ACTIVE,
+            or_(Match.user_a_id == current_uid, Match.user_b_id == current_uid),
+        )
+    )
+    exclude_ids = set()
+    for m in matched_result.scalars().all():
+        exclude_ids.add(m.user_b_id if m.user_a_id == current_uid else m.user_a_id)
+
+    liked_result = await db.execute(
+        select(Like).where(
+            Like.from_user_id == current_uid,
+            Like.status == LikeStatus.ACTIVE,
+        )
+    )
+    for lk in liked_result.scalars().all():
+        exclude_ids.add(lk.to_user_id)
+
+    # Case-insensitive partial match on display_name only (NOT username)
     result = await db.execute(
         select(UserModel, UserProfile)
         .join(UserProfile, UserProfile.user_id == UserModel.id)
         .where(
             UserModel.id != current_uid,
-            or_(
-                UserProfile.display_name.ilike(f"%{name}%"),
-                UserModel.username.ilike(f"%{name}%"),
-            ),
+            UserProfile.display_name.ilike(f"%{name}%"),
         )
         .limit(10)
     )
@@ -252,8 +323,11 @@ async def find_user_by_name(name: str) -> dict:
     seen_uids = set()
     users = []
     for user, profile in rows:
-        uid_str = str(user.id)
+        uid = user.id
+        uid_str = str(uid)
         if uid_str in seen_uids:
+            continue
+        if uid in exclude_ids:
             continue
         seen_uids.add(uid_str)
 
@@ -266,7 +340,6 @@ async def find_user_by_name(name: str) -> dict:
             )
         users.append({
             "user_id": uid_str,
-            "username": user.username,
             "display_name": profile.display_name,
             "city": profile.city,
             "age": age,
@@ -397,7 +470,7 @@ async def check_relationship_status(name: str) -> dict:
         return {
             "exists": True,
             "relation": "ambiguous",
-            "message": f"Có {len(search['users'])} người dùng tên gần giống '{name}'. Hãy hỏi user chọn đúng người (dùng username để phân biệt).",
+            "message": f"Có {len(search['users'])} người dùng tên gần giống '{name}'. Hãy dùng tên hiển thị, thành phố và tuổi để hỏi user chọn đúng người (KHÔNG hiển thị username).",
             "users": search["users"],
         }
 

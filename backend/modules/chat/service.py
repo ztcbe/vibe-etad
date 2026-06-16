@@ -83,6 +83,8 @@ async def send_message(
         "sender_user_id": str(user_id),
         "recipient_user_id": str(other_user_id),
         "content_preview": content[:60],
+        "content": content,
+        "message_type": message_type,
     }))
 
     return msg

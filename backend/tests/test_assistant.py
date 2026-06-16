@@ -96,7 +96,7 @@ async def test_agent_builds(client):
     assert len(agent.sub_agents) == 2
     sub_names = {a.name for a in agent.sub_agents}
     assert sub_names == {"MatchmakerAgent", "ConversationCoachAgent"}
-    assert len(agent.tools) == 11  # 4 profile + 6 matching + 1 notification
+    assert len(agent.tools) == 12  # 4 profile + 7 matching + 1 notification
 
 
 @pytest.mark.asyncio
