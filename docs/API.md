@@ -60,6 +60,14 @@ Revoke refresh token.
 
 ### `GET /auth/me`
 Get current user info + profile completeness.
+```json
+{
+  "id": "uuid", "username": "linh", "display_name": "Linh",
+  "role": "user", "status": "active", "date_of_birth": "2000-01-01",
+  "is_age_verified": false, "completeness_score": 80,
+  "avatar_url": "/media/uploads/...", "created_at": "..."
+}
+```
 
 ---
 
@@ -139,6 +147,19 @@ Send message to AI. Core endpoint.
 
 Action types: `candidate_cards`, `profile_summary_card`, `confirmation_request`, `match_celebration`, `system_notice`, `quick_actions`.
 
+### `POST /assistant/sessions/{session_id}/mark-read`
+Mark all assistant messages in a session as read.
+```json
+// Response
+{"marked": 3}
+```
+
+### `GET /assistant/unread-count`
+Get count of unread assistant messages across all sessions.
+```json
+{"unread_count": 5}
+```
+
 ---
 
 ## Matching
@@ -181,6 +202,12 @@ List matches in 3 groups (v0.2 §3.3):
 
 ### `GET /matches/{match_id}`
 Match detail with public profile.
+```json
+{
+  "match_id": "...", "status": "active", "matched_at": "...",
+  "profile": {"user_id": "...", "display_name": "...", "age": 29, ...}
+}
+```
 
 ### `POST /matches/{match_id}/unmatch`
 End a match.
@@ -203,7 +230,7 @@ Send message via REST (fallback for WebSocket).
 Get AI-suggested replies (2-3 items, ≤35 words each).
 ```json
 // Request
-{"tone": "natural"}  // natural, humorous, subtle, proactive, gentle, concise
+{"tone": "natural", "message_id": "uuid"}  // tone: natural, humorous, subtle, proactive, gentle, concise
 // Response
 {"suggestions": ["Chào bạn...", "Mình thấy..."]}
 ```
@@ -213,14 +240,56 @@ Real-time chat — see ARCHITECTURE.md for event protocol.
 
 ---
 
+## Notifications
+
+### `GET /notifications?limit=20&offset=0&unread_only=false`
+List notifications for current user (newest first).
+```json
+[{
+  "id": "uuid", "type": "like_received", "title": "Có người thích bạn!",
+  "body": "...", "is_read": false, "is_one_shot": true,
+  "related_entity_type": "like", "related_entity_id": "uuid",
+  "extra_data": {}, "created_at": "..."
+}]
+```
+
+### `GET /notifications/unread-count`
+Get unread count for notifications + assistant messages.
+```json
+{"unread_notifications": 3, "unread_assistant_messages": 2, "total": 5}
+```
+
+### `POST /notifications/mark-read`
+Mark specific notifications as read.
+```json
+// Request
+{"notification_ids": ["uuid1", "uuid2"]}
+// Response
+{"marked": 2}
+```
+
+### `POST /notifications/manual` *(admin only)*
+Send a manual notification to a specific user.
+```json
+// Request
+{"user_id": "uuid", "type": "system", "title": "Thông báo", "body": "Nội dung", "extra_data": {}}
+// Response
+{"id": "uuid", "created": true}
+```
+
+### WebSocket `ws://host:8000/ws/notifications?token=<jwt>`
+Global notification push. See ARCHITECTURE.md for event protocol.
+
+---
+
 ## Admin
 
 All require admin role.
 
-### `GET /admin/users?page=1&page_size=20`
+### `GET /admin/users?page=1&page_size=20&status=active`
 Paginated user list with profile info.
 
-### `GET /admin/reports?page=1&page_size=20`
+### `GET /admin/reports?page=1&page_size=20&status=open`
 Paginated report list.
 
 ### `GET /admin/stats`
@@ -237,15 +306,15 @@ Dashboard: `{"total_users": N, "active_users": N, "total_matches": N, "open_repo
 | 401 | Unauthorized (invalid/missing token) |
 | 403 | Forbidden (not participant, not admin) |
 | 404 | Not found |
-| 409 | Conflict (email exists, already liked) |
+| 409 | Conflict (username exists, already liked) |
 | 422 | Validation error |
 
 ## Error Codes
 
 | Code | Description |
 |---|---|
-| `EMAIL_EXISTS` | Email already registered |
-| `INVALID_CREDENTIALS` | Wrong email or password |
+| `USERNAME_EXISTS` | Username already registered |
+| `INVALID_CREDENTIALS` | Wrong username or password |
 | `ACCOUNT_DISABLED` | Account suspended |
 | `PROFILE_NOT_AVAILABLE` | Profile hidden/blocked |
 | `CANDIDATE_NOT_FOUND` | User not found |

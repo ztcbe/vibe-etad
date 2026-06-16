@@ -9,8 +9,9 @@ zvibe thay thế form truyền thống và thao tác swipe bằng **hội thoạ
 - Tìm người phù hợp (AI đề xuất kèm giải thích)
 - Nhận gợi ý trả lời tin nhắn trong chat 1-1
 - Được tư vấn về các mối quan hệ
+- Nhận thông báo real-time (like, match, tin nhắn mới)
 
-**Tech stack:** FastAPI + PostgreSQL + pgvector + Google ADK (https://github.com/google/adk-python) + WebSocket (backend), Vanilla HTML/CSS/JS (frontend)
+**Tech stack:** FastAPI + PostgreSQL + pgvector + Google ADK + WebSocket (backend), Vanilla HTML/CSS/JS (frontend)
 
 ## Quick Start
 
@@ -22,7 +23,7 @@ zvibe thay thế form truyền thống và thao tác swipe bằng **hội thoạ
 make db-up          # Start PostgreSQL
 make migrate        # Run DB migrations
 make seed           # Seed 30 demo users
-make dev            # Start dev server
+make dev            # Start dev server on :8000
 
 # Open http://localhost:8000
 # Login: linh / demo123456
@@ -34,33 +35,50 @@ make dev            # Start dev server
 zvibe_be/
   backend/              # FastAPI backend
     app/
-      main.py           # App entry, CORS, router wiring
-      config.py         # Pydantic Settings
-      dependencies.py   # Auth dependencies (JWT, admin)
+      main.py           # App entry, CORS, router wiring, lifespan, WS endpoints
+      config.py         # Pydantic Settings (per-agent LLM config)
+      dependencies.py   # Auth dependencies (JWT, admin, WS)
     db/
-      models/           # SQLAlchemy models (14 tables)
+      models/           # SQLAlchemy 2.0 models (15 tables)
       session.py        # Async engine + session
+      base.py           # Base model class
+      enum_helper.py    # PostgreSQL enum helper
     modules/
       auth/             # Register, login, refresh, logout, me
       profiles/         # Profile CRUD, completeness, public profile
-      media/            # Avatar upload
+      media/            # Avatar/chat attachment upload
       assistant/        # AI chat with Google ADK agents
-        agents/         # ZvibeAssistant, ProfileBuilder, Matchmaker
-        tools/          # Profile & matching tools for AI
+        agents/         # CoordinatorAgent → MatchmakerAgent, ConversationCoachAgent
+        tools/          # profile_tools, matching_tools, chat_tools, notification_tools
         prompts/        # Vietnamese system prompts
-        llm_adapter.py  # VNGCloud MaaS adapter
+        llm_adapter.py  # LiteLlm adapter for VNGCloud MaaS
+        session.py      # ADK DatabaseSessionService
       matching/         # Search, like, pass, mutual match, unmatch
         scoring.py      # Hybrid scoring algorithm
       chat/             # REST + WebSocket 1-1 chat
-        websocket.py    # WS handler with event system
+        websocket.py    # WS handler with broadcast
+      bot/              # Bot auto-reply + auto-match for demo users
+        bot_agent.py    # BotAgent (ADK) + direct litellm reply generation
+        context.py      # Bot match context builder
+        handlers.py     # Event handlers: auto-reply, auto-like, icebreaker
+        tools.py        # Bot-specific ADK tools
+      notifications/    # In-app notifications + WebSocket push
+        websocket.py    # Global per-user notification WS
+        service.py      # Notification CRUD + event-driven handlers
       moderation/       # Report, block (models only)
       admin/            # User/report listing, stats
-    common/             # Errors, enums, pagination, logging
-    migrations/         # Alembic
-    tests/              # 40 tests across S1-S4
+    common/             # Shared utilities
+      errors.py         # AppError hierarchy + standard_response
+      enums.py          # All enum types
+      events.py         # In-process async EventBus
+      pagination.py     # PaginatedResponse helper
+      logging.py        # Logging setup
+    migrations/         # Alembic (6 migrations)
+    tests/              # ~6 test files (auth, profiles, assistant, matching, chat, bot)
   frontend/             # Vanilla JS SPA
-    index.html          # Main shell (6 screens)
+    index.html          # Main shell (7 screens)
     css/main.css        # Design tokens + all styles
+    assets/             # Static assets (favicon, mark, bg image)
     js/
       api.js            # HTTP client + auth
       app.js            # Router + global state
@@ -68,6 +86,7 @@ zvibe_be/
       assistant.js      # AI chat screen
       matches.js        # Matches list
       chat.js           # 1-1 chat + WebSocket
+      notifications.js  # Notifications screen
       profile.js        # Profile + admin
       components/       # Toast, modal, celebration
   scripts/
@@ -75,6 +94,7 @@ zvibe_be/
     setup.sh            # Full project setup
     seed_demo.py        # 30 demo users
     run_dev.sh          # Dev server
+    deploy_agentbase.sh # AgentBase deployment
   docker-compose.yml    # PostgreSQL + pgvector
   Makefile              # make demo, make test, make seed
   docs/                 # This documentation
@@ -97,13 +117,15 @@ zvibe_be/
 - **Mutual Match**: Thích 2 chiều → tự động tạo chat thread
 - **Real-time Chat 1-1**: WebSocket với typing indicator, message status
 - **AI Suggest Reply**: 2-3 gợi ý trả lời theo 6 tone
+- **Real-time Notifications**: WebSocket push cho like, match, tin nhắn mới
+- **Bot Demo Users**: Auto-reply, auto-like, icebreaker cho tài khoản demo
 - **Safety**: Report, block, unmatch với confirmation modal
-- **Admin Panel**: User/report list, dashboard stats
+- **Admin Panel**: User/report listing, dashboard stats
 
 ## Running Tests
 
 ```bash
-make test           # All 40 tests
+make test           # All tests
 make test-s1        # Auth + Profiles
 make test-s2        # AI Assistant
 make test-s3        # Matching

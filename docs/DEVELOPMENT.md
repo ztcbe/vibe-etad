@@ -30,6 +30,16 @@ JWT_SECRET=<random-string>
 LLM_API_KEY=<vngcloud-api-key>
 LLM_BASE_URL=https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1
 LLM_MODEL=google/gemma-4-31b-it
+
+# Per-agent overrides (optional, fallback to LLM_* if not set)
+COORDINATOR_LLM_MODEL=
+MATCHMAKER_LLM_MODEL=
+COACH_LLM_MODEL=
+BOT_LLM_MODEL=
+
+# Bot behavior
+BOT_REPLY_DELAY_MIN=2.0
+BOT_REPLY_DELAY_MAX=8.0
 ```
 
 ## Development
@@ -37,7 +47,6 @@ LLM_MODEL=google/gemma-4-31b-it
 ```bash
 make dev           # Start server on :8000 (hot reload)
 make test          # Run all tests
-make test-s3       # Run specific sprint tests
 ```
 
 ## Project Conventions
@@ -64,9 +73,15 @@ make test-s3       # Run specific sprint tests
 
 ### Adding a new AI tool
 1. Create tool function in `modules/assistant/tools/<name>_tools.py`
-2. Tool uses `current_db` and `current_user_id` from `modules/assistant/tools/__init__.py`
+2. Tool uses `current_db`, `current_user_id`, `current_session_id` from `modules/assistant/tools/__init__.py`
 3. Register tool in `modules/assistant/agents/__init__.py`
 4. Tests: verify tool function signature (no required args — reads from contextvars)
+
+### Event-driven features
+- Use `common/events.py` EventBus for cross-module communication
+- Register handlers in module's `register_*_handlers()` function
+- Call registration during app `lifespan` startup
+- Events: `like_received`, `match_created`, `message_received`, `match_unavailable`
 
 ## Database
 
@@ -91,10 +106,14 @@ make seed
 make test
 
 # By sprint
-make test-s1    # Auth + Profiles (11)
-make test-s2    # AI Assistant (8)
-make test-s3    # Matching (15)
-make test-s4    # Chat (6)
+make test-s1    # Auth + Profiles
+make test-s2    # AI Assistant
+make test-s3    # Matching
+make test-s4    # Chat
+
+# Bot tests
+cd backend && TEST_DATABASE_URL="postgresql+asyncpg://zvibe:zvibe@localhost:5432/zvibe_test" \
+  pytest tests/test_bot.py -v
 
 # Single test
 cd backend
@@ -112,15 +131,17 @@ Vanilla HTML/CSS/JS served from same port as backend.
 # Frontend served automatically at http://localhost:8000
 # Source files in frontend/
 frontend/
-  index.html          # SPA shell
+  index.html          # SPA shell (7 screens)
   css/main.css        # All styles
+  assets/             # favicon, mark SVG, background image
   js/
-    api.js            # HTTP client
+    api.js            # HTTP client (auto JWT, auto refresh on 401)
     app.js            # Router + state
     auth.js           # Login/register
     assistant.js      # AI chat screen
     matches.js        # Matches list
-    chat.js            # 1-1 chat + WS
+    chat.js           # 1-1 chat + WS
+    notifications.js  # Notifications screen
     profile.js        # Profile + admin
     components/       # Toast, modal, celebration
 ```
@@ -132,6 +153,17 @@ From `ui_design/4_component_library.html`:
 - Borders: 1.5px solid ink (components), 2px solid ink (cards/modals)
 - Radius: 8px/12px/16px/100px (pill)
 - Background: paper texture SVG noise filter
+
+## Key Architecture Decisions
+
+### Per-agent LLM config
+Each agent (Coordinator, Matchmaker, Coach, Bot) can use a different model/API key via per-agent env vars. Fallback to global `LLM_*` if not set. See `config.py` for the resolver methods.
+
+### Bot reply via direct litellm
+Bot replies use direct `litellm.acompletion()` instead of ADK agent for simplicity and reliability. Single-turn text generation doesn't need ADK tool chaining. The ADK `BotAgent` builder is kept for potential future multi-turn bot behavior.
+
+### In-process EventBus
+Cross-module communication uses a simple in-process async EventBus rather than Redis/Celery. This keeps the architecture simple for a single-server deployment. If scaling to multiple processes, this would need replacement with a message broker.
 
 ## Troubleshooting
 
@@ -151,3 +183,9 @@ Check `frontend/` directory exists. Backend serves it automatically.
 # Recreate test DB
 docker exec zvibe_be-db-1 psql -U zvibe -d postgres -c "DROP DATABASE IF EXISTS zvibe_test; CREATE DATABASE zvibe_test;"
 ```
+
+### Bot not replying
+- Check `LLM_API_KEY` is set
+- Check user has `is_bot=True` in DB
+- Check bot-bot prevention: both sender and recipient must not both be bots
+- Check logs: `Bot {id} generating reply for match {id}`
