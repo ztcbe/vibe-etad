@@ -131,10 +131,6 @@ async def generate_bot_reply(
         )
         raw = response.choices[0].message.content
         if raw:
-            logger.debug(
-                f"Bot {bot_user_id} LLM raw response ({len(raw)} chars): "
-                f"{raw[:200]}..."
-            )
             reply = raw.strip()
             reply = _strip_thinking(reply)
             if not reply:
@@ -148,8 +144,8 @@ async def generate_bot_reply(
                 f"Bot {bot_user_id} LLM returned empty content for match {match_id}"
             )
         return reply or None
-    except Exception as e:
-        logger.error(f"Bot LLM call failed for bot={bot_user_id} match={match_id}: {e}")
+    except Exception:
+        logger.exception("Bot LLM call failed for bot=%s match=%s", bot_user_id, match_id)
         return None
 
 

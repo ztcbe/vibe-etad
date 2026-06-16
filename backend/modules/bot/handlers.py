@@ -115,8 +115,8 @@ async def _on_bot_message_received(event: Event) -> None:
                 f"{reply[:60]}..."
             )
 
-        except Exception as e:
-            logger.error(f"Bot message handler error: {e}")
+        except Exception:
+            logger.exception("Bot message handler error for match %s", match_id)
             await db.rollback()
 
 
@@ -147,8 +147,8 @@ async def _on_bot_like_received(event: Event) -> None:
                 f"mutual={result.get('is_mutual')}"
             )
 
-        except Exception as e:
-            logger.error(f"Bot like handler error: {e}")
+        except Exception:
+            logger.exception("Bot like handler error for from=%s to=%s", from_user_id, to_user_id)
             await db.rollback()
 
 
@@ -212,8 +212,8 @@ async def _on_bot_match_created(event: Event) -> None:
                 f"{reply[:60]}..."
             )
 
-        except Exception as e:
-            logger.error(f"Bot match_created handler error: {e}")
+        except Exception:
+            logger.exception("Bot match_created handler error for match %s", match_id)
             await db.rollback()
 
 

@@ -29,9 +29,9 @@ async def notifications_websocket(websocket: WebSocket, user_id: uuid.UUID) -> N
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:
-        pass
+        logger.debug("Notification WS disconnected for user %s", user_id)
     except Exception:
-        pass
+        logger.exception("Notification WS error for user %s", user_id)
     finally:
         conns = _active_connections.get(user_id, set())
         conns.discard(websocket)
@@ -51,6 +51,7 @@ async def push_to_user(user_id: uuid.UUID, data: dict) -> bool:
             await ws.send_json(data)
             sent = True
         except Exception:
+            logger.debug("Dead notification WS connection for user %s", user_id)
             dead.add(ws)
     if dead:
         connections.difference_update(dead)

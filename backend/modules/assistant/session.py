@@ -46,7 +46,7 @@ async def init_session_service(db_url: str) -> DatabaseSessionService:
         logger.warning("Session service already initialized, closing old instance")
         await _session_service.close()
 
-    logger.info("Initializing DatabaseSessionService with db_url: %s", db_url)
+    logger.info("Initializing DatabaseSessionService")
     _session_service = DatabaseSessionService(db_url=db_url)
 
     # Eagerly create tables to avoid lazy-creation races on first request.

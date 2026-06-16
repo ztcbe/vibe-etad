@@ -1,6 +1,5 @@
 """Matching service — candidate search, like, pass, list matches, unmatch."""
 import json
-import logging
 import uuid
 from datetime import date, datetime, timezone
 
@@ -19,8 +18,6 @@ from common.errors import NotFoundError, ValidationError, ConflictError
 from common.enums import (
     LikeStatus, MatchStatus, RecommendationStatus, VisibilityStatus, UserStatus
 )
-
-logger = logging.getLogger(__name__)
 
 
 async def search_candidates(

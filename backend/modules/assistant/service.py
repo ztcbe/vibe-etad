@@ -207,6 +207,16 @@ async def chat(db: AsyncSession, user_id: uuid.UUID, data: ChatRequest) -> ChatR
             confirmation_action=confirmation_action,
         )
 
+    except Exception:
+        logger.exception("Assistant chat failed for user=%s session=%s", user_id, session.id)
+        await db.rollback()
+        return ChatResponse(
+            message="Xin lỗi, có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại sau.",
+            actions=None,
+            requires_confirmation=False,
+            confirmation_action=None,
+        )
+
     finally:
         # Reset contextvars
         current_db.reset(token_db)

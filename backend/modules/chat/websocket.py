@@ -88,8 +88,8 @@ async def chat_websocket(
 
     except WebSocketDisconnect:
         logger.info(f"User {user.id} disconnected from match {match_id}")
-    except Exception as e:
-        logger.error(f"WS error in match {match_id}: {e}")
+    except Exception:
+        logger.exception("WS error in match %s", match_id)
         try:
             await websocket.send_json({
                 "event": "error",
@@ -159,7 +159,8 @@ async def _broadcast_to_others(match_id: uuid.UUID, sender_user_id: uuid.UUID, p
             try:
                 await ws.send_json(payload)
             except Exception:
-                pass  # Connection might be dead
+                # Connection might be dead — clean up below
+                pass
 
 
 async def _send_error(websocket: WebSocket, code: str, message: str):

@@ -4,14 +4,11 @@ These tools read `current_db` and `current_user_id` from contextvars
 (see modules/assistant/tools/__init__.py), same pattern as assistant tools.
 """
 import uuid
-import logging
 
 from sqlalchemy import select
 
 from db.models.profile import UserProfile
 from modules.bot.context import get_match_context_for_bot
-
-logger = logging.getLogger(__name__)
 
 
 async def get_my_bot_profile() -> dict:

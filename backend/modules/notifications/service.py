@@ -274,8 +274,8 @@ async def _on_like_received(event: Event) -> None:
                         "metadata": {"notification_type": "like_received"},
                     },
                 })
-        except Exception as e:
-            logger.error(f"Error handling like_received: {e}")
+        except Exception:
+            logger.exception("Error handling like_received")
             await db.rollback()
 
 
@@ -355,8 +355,8 @@ async def _on_match_created(event: Event) -> None:
                         "metadata": {"notification_type": "match_created"},
                     },
                 })
-        except Exception as e:
-            logger.error(f"Error handling match_created: {e}")
+        except Exception:
+            logger.exception("Error handling match_created")
             await db.rollback()
 
 
@@ -388,8 +388,9 @@ async def _on_message_received(event: Event) -> None:
                     "preview": content_preview,
                 },
             })
-        except Exception as e:
-            logger.error(f"Error handling message_received: {e}")
+        except Exception:
+            logger.exception("Error handling message_received")
+            await db.rollback()
 
 
 async def _on_match_unavailable(event: Event) -> None:
@@ -414,8 +415,8 @@ async def _on_match_unavailable(event: Event) -> None:
                     is_one_shot=True,
                     extra_data={"match_id": str(match_id), "reason": reason},
                 )
-        except Exception as e:
-            logger.error(f"Error handling match_unavailable: {e}")
+        except Exception:
+            logger.exception("Error handling match_unavailable")
             await db.rollback()
 
 

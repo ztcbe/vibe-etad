@@ -6,7 +6,14 @@ between ADK's genai types and provider-native formats (OpenAI, Anthropic, etc.).
 Each agent can use a different model via per-agent env vars
 (fallback to global LLM_* if not set).
 """
+import litellm
 from google.adk.models.lite_llm import LiteLlm
+
+# ── Silence litellm internal debug noise ──────────────────────────────
+# litellm logs every request/response at DEBUG level by default.
+# We only want to hear about actual errors.
+litellm.set_verbose = False
+litellm.suppress_debug_info = True
 
 
 def build_llm(

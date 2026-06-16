@@ -39,7 +39,7 @@ class EventBus:
             try:
                 asyncio.create_task(handler(event))
             except Exception as e:
-                logger.error(f"Event handler error for {event.name}: {e}")
+                logger.exception("Event handler error for %s", event.name)
 
 
 # Global singleton
